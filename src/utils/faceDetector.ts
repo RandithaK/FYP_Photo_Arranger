@@ -1,214 +1,199 @@
-import type { FaceDetectionBox, CropData } from '../types';
+import type { FaceDetector } from '@mediapipe/tasks-vision';
+import type { CropData, FaceDetectionBox } from '../types';
 import { loadImageElement } from './fileUtils';
 
-/**
- * Intelligent face detector running purely client-side.
- * Uses native browser FaceDetector API if available,
- * with fallback to an optimized YCbCr skin-tone and morphological saliency detector.
- */
-export async function detectFaceInImage(
-  imageSrc: string | HTMLImageElement
-): Promise<FaceDetectionBox | null> {
-  const img = typeof imageSrc === 'string' ? await loadImageElement(imageSrc) : imageSrc;
-  const naturalWidth = img.naturalWidth || img.width;
-  const naturalHeight = img.naturalHeight || img.height;
+/** Crop rectangle in source-image pixels. */
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
-  if (naturalWidth === 0 || naturalHeight === 0) return null;
+/** Output headshot aspect ratio (width / height). */
+export const HEADSHOT_ASPECT = 3 / 4;
 
-  // 1. Try Native Browser FaceDetector API (available in modern Chromium browsers)
-  if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-    try {
-      const FaceDetectorCtor = (window as unknown as { FaceDetector: new (opts?: { fastMode?: boolean; maxDetectedFaces?: number }) => { detect: (img: HTMLImageElement) => Promise<Array<{ boundingBox: DOMRectReadOnly }>> } }).FaceDetector;
-      const detector = new FaceDetectorCtor({ fastMode: false, maxDetectedFaces: 1 });
-      const faces = await detector.detect(img);
-      if (faces && faces.length > 0) {
-        const box = faces[0].boundingBox;
-        return {
-          x: Math.max(0, box.x),
-          y: Math.max(0, box.y),
-          width: Math.min(naturalWidth - box.x, box.width),
-          height: Math.min(naturalHeight - box.y, box.height),
-          confidence: 0.95,
-        };
-      }
-    } catch (e) {
-      console.warn('Native FaceDetector encountered an error, falling back to smart saliency detector', e);
-    }
+const BASE = import.meta.env.BASE_URL;
+let detectorPromise: Promise<FaceDetector> | null = null;
+
+/** Lazily initialises the MediaPipe BlazeFace detector (served from our own origin). */
+function getDetector(): Promise<FaceDetector> {
+  if (!detectorPromise) {
+    detectorPromise = (async () => {
+      // Loaded on demand so the ML runtime doesn't weigh down first paint
+      const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
+      const fileset = await FilesetResolver.forVisionTasks(`${BASE}mediapipe/wasm`);
+      return FaceDetector.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: `${BASE}models/blaze_face_short_range.tflite`,
+          delegate: 'CPU',
+        },
+        runningMode: 'IMAGE',
+        minDetectionConfidence: 0.5,
+      });
+    })();
+    // Allow a retry if initialisation failed (e.g. transient load error)
+    detectorPromise.catch(() => {
+      detectorPromise = null;
+    });
   }
+  return detectorPromise;
+}
 
-  // 2. Pure client-side Fallback: Skin-tone & upper-torso morphological saliency detector
-  return detectFaceViaSaliency(img, naturalWidth, naturalHeight);
+/** Start loading the model early so the first upload feels instant. */
+export function preloadFaceDetector(): void {
+  getDetector().catch((e) => console.warn('Face detector failed to load', e));
+}
+
+type Source = HTMLImageElement | HTMLCanvasElement;
+
+function detectIn(detector: FaceDetector, source: Source): FaceDetectionBox[] {
+  const result = detector.detect(source);
+  return result.detections
+    .filter((d) => d.boundingBox)
+    .map((d) => ({
+      x: d.boundingBox!.originX,
+      y: d.boundingBox!.originY,
+      width: d.boundingBox!.width,
+      height: d.boundingBox!.height,
+      confidence: d.categories[0]?.score ?? 0,
+    }));
+}
+
+/** Picks the most prominent face: large and confident. */
+function bestFace(faces: FaceDetectionBox[]): FaceDetectionBox | null {
+  if (faces.length === 0) return null;
+  return faces.reduce((a, b) =>
+    b.width * b.height * (b.confidence ?? 1) > a.width * a.height * (a.confidence ?? 1) ? b : a
+  );
 }
 
 /**
- * Robust skin chrominance cluster analyzer for facial region localization.
- * Runs on a downsampled offscreen canvas for ultra-fast (15ms) performance.
+ * Detects the main face in an image. Returns null if no face is found.
+ *
+ * The short-range BlazeFace model expects reasonably large faces, so if nothing
+ * is found on the whole image we scan overlapping square windows (multi-scale)
+ * to catch smaller faces in half-body / full-body shots.
  */
-function detectFaceViaSaliency(
-  img: HTMLImageElement,
-  origW: number,
-  origH: number
-): FaceDetectionBox | null {
-  const sampleW = 200;
-  const sampleH = Math.round((sampleW * origH) / origW);
+export async function detectFace(img: HTMLImageElement): Promise<FaceDetectionBox | null> {
+  const detector = await getDetector();
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+
+  const direct = bestFace(detectIn(detector, img));
+  if (direct) return direct;
 
   const canvas = document.createElement('canvas');
-  canvas.width = sampleW;
-  canvas.height = sampleH;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  ctx.drawImage(img, 0, 0, sampleW, sampleH);
-  const imgData = ctx.getImageData(0, 0, sampleW, sampleH);
-  const data = imgData.data;
+  const found: FaceDetectionBox[] = [];
+  for (const factor of [0.6, 0.35]) {
+    const size = Math.round(Math.min(W, H) * factor);
+    const step = Math.round(size / 2);
+    // Work at a modest resolution: the model input is 128px anyway
+    const tile = Math.min(size, 512);
+    canvas.width = tile;
+    canvas.height = tile;
+    const scale = size / tile;
 
-  // Skin map grid
-  const skinGrid: boolean[][] = [];
-  for (let y = 0; y < sampleH; y++) {
-    skinGrid[y] = new Array(sampleW).fill(false);
-  }
-
-  let totalSkinCount = 0;
-  let sumX = 0;
-  let sumY = 0;
-
-  for (let y = 0; y < sampleH; y++) {
-    for (let x = 0; x < sampleW; x++) {
-      const idx = (y * sampleW + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-
-      // Convert RGB to YCbCr
-      const yVal = 0.299 * r + 0.587 * g + 0.114 * b;
-      const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-      const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-
-      // Skin chrominance bounds (standard biometric thresholding)
-      const isSkin =
-        cb >= 77 && cb <= 127 &&
-        cr >= 133 && cr <= 173 &&
-        yVal >= 50 &&
-        r > g && g > b;
-
-      // Give higher weight to upper 2/3 of the image where headshots are located
-      const verticalWeight = y < sampleH * 0.75 ? 1.5 : 0.3;
-
-      if (isSkin) {
-        skinGrid[y][x] = true;
-        totalSkinCount += verticalWeight;
-        sumX += x * verticalWeight;
-        sumY += y * verticalWeight;
-      }
-    }
-  }
-
-  // If sufficient skin pixels were detected
-  if (totalSkinCount > sampleW * sampleH * 0.02) {
-    const avgX = sumX / totalSkinCount;
-    const avgY = sumY / totalSkinCount;
-
-    // Find bounding cluster around centroid
-    let minX = sampleW, maxX = 0, minY = sampleH, maxY = 0;
-    const maxRadiusX = sampleW * 0.35;
-    const maxRadiusY = sampleH * 0.35;
-
-    for (let y = 0; y < sampleH; y++) {
-      for (let x = 0; x < sampleW; x++) {
-        if (skinGrid[y][x]) {
-          if (Math.abs(x - avgX) < maxRadiusX && Math.abs(y - avgY) < maxRadiusY) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
+    for (let y = 0; y + size <= H + step / 2; y += step) {
+      for (let x = 0; x + size <= W + step / 2; x += step) {
+        const sx = Math.min(x, W - size);
+        const sy = Math.min(y, H - size);
+        ctx.clearRect(0, 0, tile, tile);
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, tile, tile);
+        for (const f of detectIn(detector, canvas)) {
+          found.push({
+            x: sx + f.x * scale,
+            y: sy + f.y * scale,
+            width: f.width * scale,
+            height: f.height * scale,
+            confidence: f.confidence,
+          });
         }
       }
     }
-
-    if (maxX > minX && maxY > minY) {
-      const scaleX = origW / sampleW;
-      const scaleY = origH / sampleH;
-      const faceW = (maxX - minX) * scaleX;
-      const faceH = (maxY - minY) * scaleY;
-      const faceX = minX * scaleX;
-      const faceY = minY * scaleY;
-
-      return {
-        x: Math.max(0, faceX),
-        y: Math.max(0, faceY),
-        width: Math.min(origW - faceX, faceW),
-        height: Math.min(origH - faceY, faceH),
-        confidence: 0.75,
-      };
-    }
+    if (found.length > 0) break;
   }
-
-  // Fallback heuristic: Center-weighted upper third portrait box
-  const defW = origW * 0.45;
-  const defH = origH * 0.4;
-  return {
-    x: (origW - defW) / 2,
-    y: origH * 0.15,
-    width: defW,
-    height: defH,
-    confidence: 0.5,
-  };
+  return bestFace(found);
 }
 
 /**
- * Calculates the ideal professional headshot crop box (target aspect ratio: 3:4 portrait)
- * based on detected face boundaries.
- * Enforces the strict rule: "professional headshot showing only the face".
+ * Computes a professional 3:4 headshot crop around a detected face.
+ *
+ * BlazeFace boxes span roughly brow-to-chin. We size the crop at ~2.2x the face
+ * height and place the face centre at mid-height, which leaves room for the
+ * hair above and a little neck/shoulder below — matching the "correct" example
+ * in the guidelines (face only, not upper body).
  */
-export function calculateSmartCrop(
-  imgWidth: number,
-  imgHeight: number,
-  faceBox: FaceDetectionBox | null,
-  targetAspectRatio: number = 3 / 4 // width / height
-): CropData {
-  let cx = imgWidth / 2;
-  let cy = imgHeight * 0.38; // Default upper-center bias
-  let faceH = imgHeight * 0.45;
+export function calculateHeadshotCrop(
+  imgW: number,
+  imgH: number,
+  face: FaceDetectionBox | null
+): Rect {
+  if (!face) return centeredCrop(imgW, imgH);
 
-  if (faceBox && faceBox.width > 0 && faceBox.height > 0) {
-    cx = faceBox.x + faceBox.width / 2;
-    cy = faceBox.y + faceBox.height * 0.48; // Eye-line center
-    faceH = faceBox.height;
+  const FACE_TO_CROP = 2.2;
+  const FACE_CENTER_Y = 0.5; // face centre at 50% of crop height
+
+  let cropH = face.height * FACE_TO_CROP;
+  let cropW = cropH * HEADSHOT_ASPECT;
+
+  // Shrink if the photo is too tight to fit the ideal framing
+  const fit = Math.min(1, imgW / cropW, imgH / cropH);
+  cropW *= fit;
+  cropH *= fit;
+
+  const cx = face.x + face.width / 2;
+  const cy = face.y + face.height / 2;
+  const x = clamp(cx - cropW / 2, 0, imgW - cropW);
+  const y = clamp(cy - cropH * FACE_CENTER_Y, 0, imgH - cropH);
+
+  return roundCrop({ x, y, width: cropW, height: cropH });
+}
+
+/** Largest 3:4 crop, horizontally centred and biased towards the top. */
+export function centeredCrop(imgW: number, imgH: number): Rect {
+  let w = imgW;
+  let h = w / HEADSHOT_ASPECT;
+  if (h > imgH) {
+    h = imgH;
+    w = h * HEADSHOT_ASPECT;
   }
+  return roundCrop({ x: (imgW - w) / 2, y: (imgH - h) * 0.25, width: w, height: h });
+}
 
-  // In a professional headshot, face occupies ~60% of crop height
-  let cropHeight = faceH / 0.58;
-  let cropWidth = cropHeight * targetAspectRatio;
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
 
-  // If crop dimensions exceed image boundaries, fit within image
-  if (cropWidth > imgWidth) {
-    cropWidth = imgWidth;
-    cropHeight = cropWidth / targetAspectRatio;
-  }
-  if (cropHeight > imgHeight) {
-    cropHeight = imgHeight;
-    cropWidth = cropHeight * targetAspectRatio;
-  }
-
-  // Position crop centered around face center (cx, cy)
-  let cropX = cx - cropWidth / 2;
-  let cropY = cy - cropHeight * 0.42; // Chin and hair headroom
-
-  // Clamp within image bounds
-  if (cropX < 0) cropX = 0;
-  if (cropY < 0) cropY = 0;
-  if (cropX + cropWidth > imgWidth) cropX = imgWidth - cropWidth;
-  if (cropY + cropHeight > imgHeight) cropY = imgHeight - cropHeight;
-
+function roundCrop(c: Rect): Rect {
   return {
-    x: Math.round(cropX),
-    y: Math.round(cropY),
-    width: Math.round(cropWidth),
-    height: Math.round(cropHeight),
-    zoom: 1.0,
-    rotation: 0,
-    flipH: false,
-    flipV: false,
+    x: Math.round(c.x),
+    y: Math.round(c.y),
+    width: Math.round(c.width),
+    height: Math.round(c.height),
   };
+}
+
+// --- Compatibility wrappers for the pre-wizard UI (removed in the UX redesign) ---
+
+/** @deprecated use detectFace */
+export async function detectFaceInImage(
+  src: string | HTMLImageElement
+): Promise<FaceDetectionBox | null> {
+  const img = typeof src === 'string' ? await loadImageElement(src) : src;
+  return detectFace(img).catch(() => null);
+}
+
+/** @deprecated use calculateHeadshotCrop */
+export function calculateSmartCrop(
+  imgW: number,
+  imgH: number,
+  face: FaceDetectionBox | null,
+  _aspect?: number
+): CropData {
+  void _aspect;
+  return { ...calculateHeadshotCrop(imgW, imgH, face), zoom: 1, rotation: 0, flipH: false, flipV: false };
 }
