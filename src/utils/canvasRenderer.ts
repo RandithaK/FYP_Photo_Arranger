@@ -7,7 +7,6 @@ const SERIF = '"Times New Roman", Times, "Liberation Serif", serif';
 const MAX_CARD_WIDTH = 1500;
 const MAX_CANVAS_WIDTH = 8000;
 
-const GAP_RATIO = 0.03; // uniform spacing between/around cards
 const ROW_RATIO = 0.12; // height of each text row relative to card width
 
 /** Below this card width the output will look soft when printed. */
@@ -20,15 +19,16 @@ export const LOW_RES_CARD_WIDTH = 300;
 export function outputCardWidth(students: Student[]): number {
   const n = students.length;
   const smallestCrop = Math.min(...students.map((s) => s.photo?.crop.width ?? Infinity));
-  // canvas width = card * (n + gapRatio * (n + 1))
-  const canvasCap = Math.floor(MAX_CANVAS_WIDTH / (n + GAP_RATIO * (n + 1)));
+  const canvasCap = Math.floor(MAX_CANVAS_WIDTH / n);
   return Math.max(1, Math.floor(Math.min(smallestCrop, MAX_CARD_WIDTH, canvasCap)));
 }
 
 /**
  * Renders the submission image following the guidelines:
- * identical 3:4 photos in form order, index number directly above the name
- * in tight bordered rows, uniform spacing, serif type, white background.
+ * - Identical 3:4 photos in form order
+ * - Seamless side-by-side arrangement with a single thin dividing line (no gaps)
+ * - Index number directly above the name in tight bordered rows
+ * - Crisp serif typography, pure white text background
  */
 export async function renderSubmission(students: Student[]): Promise<HTMLCanvasElement> {
   const images = await Promise.all(students.map((s) => loadImageElement(s.photo!.src)));
@@ -38,40 +38,53 @@ export async function renderSubmission(students: Student[]): Promise<HTMLCanvasE
   const photoH = Math.round((cardW * 4) / 3);
   const rowH = Math.round(cardW * ROW_RATIO);
   const cardH = photoH + rowH * 2;
-  const gap = Math.round(cardW * GAP_RATIO);
-  const line = Math.max(1, Math.round(cardW / 300));
+  const line = Math.max(1, Math.round(cardW / 450));
+
+  const totalW = cardW * n;
+  const totalH = cardH;
 
   const canvas = document.createElement('canvas');
-  canvas.width = gap * (n + 1) + cardW * n;
-  canvas.height = gap * 2 + cardH;
+  canvas.width = totalW;
+  canvas.height = totalH;
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, totalW, totalH);
 
   // One font size per row type across all cards so text lines up perfectly
-  const textMaxW = cardW - rowH * 0.5;
-  const indexSize = fitFontSize(ctx, students.map((s) => s.indexNumber), rowH * 0.6, textMaxW);
+  const textMaxW = cardW - rowH * 0.4;
+  const indexSize = fitFontSize(ctx, students.map((s) => s.indexNumber), rowH * 0.58, textMaxW);
   const nameSize = fitFontSize(ctx, students.map((s) => s.name.trim()), rowH * 0.52, textMaxW);
 
+  // 1. Draw each student's photo and details
   students.forEach((s, i) => {
-    const x = gap + i * (cardW + gap);
-    const y = gap;
+    const x = i * cardW;
     const c = s.photo!.crop;
 
-    ctx.drawImage(images[i], c.x, c.y, c.width, c.height, x, y, cardW, photoH);
+    ctx.drawImage(images[i], c.x, c.y, c.width, c.height, x, 0, cardW, photoH);
 
     ctx.fillStyle = '#000000';
-    drawCentered(ctx, s.indexNumber, `${indexSize}px ${SERIF}`, x + cardW / 2, y + photoH + rowH / 2);
-    drawCentered(ctx, s.name.trim(), `${nameSize}px ${SERIF}`, x + cardW / 2, y + photoH + rowH * 1.5);
-
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = line;
-    ctx.strokeRect(x + line / 2, y + line / 2, cardW - line, cardH - line);
-    hLine(ctx, x, x + cardW, y + photoH, line);
-    hLine(ctx, x, x + cardW, y + photoH + rowH, line);
+    drawCentered(ctx, s.indexNumber, `bold ${indexSize}px ${SERIF}`, x + cardW / 2, photoH + rowH / 2);
+    drawCentered(ctx, s.name.trim(), `${nameSize}px ${SERIF}`, x + cardW / 2, photoH + rowH * 1.5);
   });
+
+  // 2. Draw single thin divider lines between cards and rows (zero gaps)
+  // Horizontal dividing line: Photo / Index Number
+  hLine(ctx, 0, totalW, photoH, line);
+  // Horizontal dividing line: Index Number / Name
+  hLine(ctx, 0, totalW, photoH + rowH, line);
+
+  // Vertical dividing lines between adjacent members
+  for (let i = 1; i < n; i++) {
+    const vx = i * cardW;
+    vLine(ctx, vx, 0, totalH, line);
+  }
+
+  // Outer border around the entire combined submission
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = line;
+  ctx.strokeRect(line / 2, line / 2, totalW - line, totalH - line);
 
   return canvas;
 }
@@ -105,6 +118,16 @@ function hLine(ctx: CanvasRenderingContext2D, x1: number, x2: number, y: number,
   ctx.moveTo(x1, y);
   ctx.lineTo(x2, y);
   ctx.lineWidth = w;
+  ctx.strokeStyle = '#000000';
+  ctx.stroke();
+}
+
+function vLine(ctx: CanvasRenderingContext2D, x: number, y1: number, y2: number, w: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y1);
+  ctx.lineTo(x, y2);
+  ctx.lineWidth = w;
+  ctx.strokeStyle = '#000000';
   ctx.stroke();
 }
 
