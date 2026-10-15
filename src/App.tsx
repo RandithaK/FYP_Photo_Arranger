@@ -125,18 +125,24 @@ export function App() {
             ) : (
               <Sun size={15} />
             )}
-            <span>
-              {preference === 'system' ? `Auto (${resolvedTheme})` : preference === 'dark' ? 'Dark' : 'Light'}
+            <span className="theme-toggle-label">
+              <span className="theme-text-full">
+                {preference === 'system' ? `Auto (${resolvedTheme})` : preference === 'dark' ? 'Dark' : 'Light'}
+              </span>
+              <span className="theme-text-short">
+                {preference === 'system' ? 'Auto' : preference === 'dark' ? 'Dark' : 'Light'}
+              </span>
             </span>
           </button>
 
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn btn-ghost guidelines-toggle-btn"
             onClick={() => setIsGuidelinesOpen(true)}
+            title="View Guidelines"
           >
             <BookOpen size={15} />
-            <span>View Guidelines</span>
+            <span className="guidelines-btn-text">Guidelines</span>
           </button>
         </div>
       </header>
@@ -150,7 +156,10 @@ export function App() {
             onClick={() => setCurrentStep(1)}
           >
             <div className="bubble-num">{currentStep > 1 ? <Check size={14} /> : '1'}</div>
-            <span className="bubble-label">1. Student Details</span>
+            <span className="bubble-label">
+              <span className="label-full">1. Student Details</span>
+              <span className="label-short">1. Details</span>
+            </span>
           </button>
 
           <div className={`step-connector ${currentStep > 1 ? 'active' : ''}`} />
@@ -164,7 +173,10 @@ export function App() {
             }}
           >
             <div className="bubble-num">{currentStep > 2 ? <Check size={14} /> : '2'}</div>
-            <span className="bubble-label">2. Upload Photos</span>
+            <span className="bubble-label">
+              <span className="label-full">2. Upload Photos</span>
+              <span className="label-short">2. Photos</span>
+            </span>
           </button>
 
           <div className={`step-connector ${currentStep > 2 ? 'active' : ''}`} />
@@ -177,7 +189,10 @@ export function App() {
             }}
           >
             <div className="bubble-num">3</div>
-            <span className="bubble-label">3. Preview & Download</span>
+            <span className="bubble-label">
+              <span className="label-full">3. Preview & Download</span>
+              <span className="label-short">3. Preview</span>
+            </span>
           </button>
         </div>
       </nav>

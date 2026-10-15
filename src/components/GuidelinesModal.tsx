@@ -164,7 +164,7 @@ export const GuidelinesModal: React.FC<GuidelinesModalProps> = ({ isOpen, onClos
             <CheckCircle2 size={15} color="#16a34a" />
             <span>This application automatically enforces exact sizing, font alignment, and single JPEG export!</span>
           </span>
-          <button type="button" className="action-btn primary-btn" onClick={onClose}>
+          <button type="button" className="btn btn-primary" onClick={onClose}>
             Got it, Let's build!
           </button>
         </div>

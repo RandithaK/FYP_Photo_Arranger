@@ -123,6 +123,14 @@
   color: var(--text-main);
 }
 
+.theme-text-short {
+  display: none;
+}
+
+.label-short {
+  display: none;
+}
+
 .theme-mode-badge {
   font-size: 0.68rem;
   background: var(--border-color);
@@ -755,15 +763,299 @@
   }
 }
 
-/* Responsive adjustments */
+/* ==========================================================================
+   Comprehensive Mobile & Tablet Responsive Design
+   ========================================================================== */
+
+/* Medium Devices (Tablets, <= 768px) */
+@media (max-width: 768px) {
+  .app-content-body {
+    padding: 0 1rem 3.5rem 1rem;
+    margin: 1.5rem auto;
+  }
+}
+
+/* Small Devices (Phablets & Phones, <= 640px) */
 @media (max-width: 640px) {
+  /* Prevent horizontal document overflow */
+  .app-shell {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Header */
+  .app-header {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .header-brand {
+    gap: 0.5rem;
+  }
+
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  .brand-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .header-brand h1 {
+    font-size: 0.95rem;
+    line-height: 1.15;
+  }
+
+  .brand-sub {
+    font-size: 0.68rem;
+  }
+
+  .header-actions {
+    gap: 0.35rem;
+  }
+
+  .theme-toggle-btn {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75rem;
+    gap: 0.3rem;
+  }
+
+  .guidelines-toggle-btn {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.75rem;
+    gap: 0.3rem;
+  }
+
+  /* Step Progress Navigation */
+  .step-progress-nav {
+    padding: 0.65rem 0.5rem;
+  }
+
+  .step-progress-inner {
+    max-width: 100%;
+  }
+
+  .label-full {
+    display: none;
+  }
+
+  .label-short {
+    display: inline;
+  }
+
+  .step-bubble {
+    gap: 0.35rem;
+    padding: 0.2rem 0.35rem;
+  }
+
+  .bubble-num {
+    width: 22px;
+    height: 22px;
+    font-size: 0.72rem;
+  }
+
+  .bubble-label {
+    font-size: 0.75rem;
+  }
+
+  .step-connector {
+    margin: 0 0.35rem;
+  }
+
+  /* Step Card Base */
+  .app-content-body {
+    margin: 1rem auto;
+    padding: 0 0.75rem 3rem 0.75rem;
+  }
+
+  .step-card {
+    padding: 1.1rem 0.85rem;
+    border-radius: 10px;
+    gap: 1.15rem;
+  }
+
+  .step-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+    padding-bottom: 0.85rem;
+  }
+
+  .step-card-header h2 {
+    font-size: 1.15rem;
+  }
+
+  .type-toggle-group {
+    width: 100%;
+  }
+
+  .type-toggle-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.5rem;
+  }
+
+  /* Step 1 Student Row Reorganization */
+  .student-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "order actions"
+      "inputs inputs";
+    gap: 0.65rem;
+    padding: 0.75rem;
+  }
+
+  .row-order-cell {
+    grid-area: order;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .row-actions-cell {
+    grid-area: actions;
+    justify-content: flex-end;
+  }
+
   .row-inputs-cell {
+    grid-area: inputs;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+    width: 100%;
+  }
+
+  .input-group input {
+    width: 100%;
+    font-size: 16px; /* Prevents auto-zoom on mobile WebKit/iOS */
+    padding: 0.6rem 0.65rem;
+  }
+
+  /* Step 2 Photos Grid */
+  .photos-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .photo-card {
+    padding: 0.55rem;
+    gap: 0.45rem;
+  }
+
+  .photo-card-actions {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .photo-card-actions .btn {
+    width: 100%;
+    padding: 0.45rem 0.5rem;
+  }
+
+  /* Step 3 Preview & Output */
+  .header-action-btns {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .header-action-btns .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .preview-canvas-box {
+    padding: 0.75rem;
+    min-height: 220px;
+  }
+
+  .preview-meta-bar {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .meta-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .meta-dot {
+    display: none;
+  }
+
+  .guideline-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  /* Common Step Footer */
+  .step-footer {
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+    align-items: stretch;
+    padding-top: 1rem;
+  }
+
+  .step-footer .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.65rem 1rem;
+    min-height: 44px; /* Touch target accessibility standard */
+  }
+
+  .step-status-hint {
+    text-align: center;
+  }
+}
+
+/* Extra Small Devices (Phones, <= 480px) */
+@media (max-width: 480px) {
+  .brand-sub {
+    display: none;
+  }
+
+  .theme-text-full {
+    display: none;
+  }
+
+  .theme-text-short {
+    display: inline;
+  }
+
+  .disclaimer-banner {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem;
+  }
+
+  .disclaimer-text {
+    font-size: 0.7rem;
+    line-height: 1.25;
+  }
+}
+
+/* Tiny Devices (<= 360px, e.g. iPhone SE / Galaxy Z Flip) */
+@media (max-width: 360px) {
+  .photos-grid {
     grid-template-columns: 1fr;
   }
-  .step-card {
-    padding: 1.25rem;
+
+  .guidelines-btn-text {
+    display: none;
   }
-  .app-header {
-    padding: 0.75rem 1rem;
+
+  .theme-text-short {
+    display: none;
+  }
+
+  .bubble-label {
+    display: none;
+  }
+
+  .step-connector {
+    margin: 0 0.5rem;
   }
 }
