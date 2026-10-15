@@ -7,6 +7,51 @@
   color: #0f172a;
 }
 
+/* Disclaimer Banner */
+.disclaimer-banner {
+  background-color: #fffbeb;
+  border-bottom: 1px solid #fef3c7;
+  color: #92400e;
+  padding: 0.4rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 500;
+  z-index: 60;
+}
+
+.disclaimer-text {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 auto;
+}
+
+.disclaimer-icon {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.disclaimer-dismiss-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #b45309;
+  padding: 0.2rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.75;
+  transition: all 0.15s ease;
+}
+
+.disclaimer-dismiss-btn:hover {
+  opacity: 1;
+  background: rgba(180, 83, 9, 0.1);
+}
+
 /* Header */
 .app-header {
   background: #ffffff;

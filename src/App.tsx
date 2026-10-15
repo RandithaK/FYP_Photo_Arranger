@@ -9,7 +9,9 @@ import { GuidelinesModal } from './components/GuidelinesModal';
 import {
   GraduationCap,
   BookOpen,
-  Check
+  Check,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import './App.css';
 
@@ -21,6 +23,7 @@ const INITIAL_GROUP_STUDENTS: Student[] = [
 ];
 
 export function App() {
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [projectType, setProjectType] = useState<ProjectType>('group');
   const [students, setStudents] = useState<Student[]>(INITIAL_GROUP_STUDENTS);
@@ -66,6 +69,24 @@ export function App() {
 
   return (
     <div className="app-shell">
+      {/* Disclaimer Banner on Initial Load */}
+      {showDisclaimer && (
+        <aside className="disclaimer-banner" role="alert">
+          <div className="disclaimer-text">
+            <AlertTriangle size={13} className="disclaimer-icon" />
+            <span>Not affiliated with any university, use at your own risk</span>
+          </div>
+          <button
+            type="button"
+            className="disclaimer-dismiss-btn"
+            onClick={() => setShowDisclaimer(false)}
+            aria-label="Dismiss disclaimer"
+          >
+            <X size={13} />
+          </button>
+        </aside>
+      )}
+
       {/* Top Navbar */}
       <header className="app-header">
         <div className="header-brand">
