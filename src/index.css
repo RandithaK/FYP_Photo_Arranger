@@ -3,15 +3,105 @@
   --serif: 'Times New Roman', Times, Georgia, serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
+  /* Theme tokens: Light Mode default */
+  --bg-page: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8fafc;
+  --bg-elevated: #ffffff;
+  --border-color: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-label: #475569;
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --input-text: #0f172a;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-subtle: #eff6ff;
+  --leader-bg: #f0f7ff;
+  --leader-border: #93c5fd;
+  --leader-badge-bg: #dbeafe;
+  --leader-badge-text: #1d4ed8;
+  --banner-bg: #fffbeb;
+  --banner-border: #fef3c7;
+  --banner-text: #92400e;
+  --banner-icon: #d97706;
+  --banner-btn: #b45309;
+  --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  --modal-backdrop: rgba(15, 23, 42, 0.7);
+
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.5;
-  color: #0f172a;
-  background-color: #f1f5f9;
+  color: var(--text-main);
+  background-color: var(--bg-page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* System preference dark mode fallback when data-theme is not explicitly set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-page: #0b0f19;
+    --bg-card: #151d2c;
+    --bg-subtle: #1a2336;
+    --bg-elevated: #1e293b;
+    --border-color: #243048;
+    --border-strong: #334155;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-label: #cbd5e1;
+    --input-bg: #0d1522;
+    --input-border: #334155;
+    --input-text: #f8fafc;
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --primary-subtle: #1e293b;
+    --leader-bg: #13243e;
+    --leader-border: #1d4ed8;
+    --leader-badge-bg: #1e3a8a;
+    --leader-badge-text: #93c5fd;
+    --banner-bg: #291804;
+    --banner-border: #452707;
+    --banner-text: #fde68a;
+    --banner-icon: #f59e0b;
+    --banner-btn: #fef08a;
+    --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --modal-backdrop: rgba(0, 0, 0, 0.82);
+  }
+}
+
+/* Explicit Dark Theme */
+[data-theme="dark"] {
+  --bg-page: #0b0f19;
+  --bg-card: #151d2c;
+  --bg-subtle: #1a2336;
+  --bg-elevated: #1e293b;
+  --border-color: #243048;
+  --border-strong: #334155;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-label: #cbd5e1;
+  --input-bg: #0d1522;
+  --input-border: #334155;
+  --input-text: #f8fafc;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-subtle: #1e293b;
+  --leader-bg: #13243e;
+  --leader-border: #1d4ed8;
+  --leader-badge-bg: #1e3a8a;
+  --leader-badge-text: #93c5fd;
+  --banner-bg: #291804;
+  --banner-border: #452707;
+  --banner-text: #fde68a;
+  --banner-icon: #f59e0b;
+  --banner-btn: #fef08a;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --modal-backdrop: rgba(0, 0, 0, 0.82);
 }
 
 *, *::before, *::after {
@@ -22,7 +112,9 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: #f1f5f9;
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #root {

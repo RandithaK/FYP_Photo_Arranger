@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Student, ProjectType, CropData } from './types';
 import { preloadFaceDetector } from './utils/faceDetector';
+import { useTheme } from './utils/useTheme';
 import { Step1Details } from './components/Step1Details';
 import { Step2Photos } from './components/Step2Photos';
 import { Step3Preview } from './components/Step3Preview';
@@ -11,7 +12,10 @@ import {
   BookOpen,
   Check,
   AlertTriangle,
-  X
+  X,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import './App.css';
 
@@ -23,6 +27,7 @@ const INITIAL_GROUP_STUDENTS: Student[] = [
 ];
 
 export function App() {
+  const { preference, resolvedTheme, cycleTheme } = useTheme();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [projectType, setProjectType] = useState<ProjectType>('group');
@@ -99,14 +104,41 @@ export function App() {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => setIsGuidelinesOpen(true)}
-        >
-          <BookOpen size={15} />
-          <span>View Guidelines</span>
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={cycleTheme}
+            title={
+              preference === 'system'
+                ? `System Theme (${resolvedTheme}) — click to switch to Light`
+                : preference === 'light'
+                ? 'Light Theme — click to switch to Dark'
+                : 'Dark Theme — click to switch to System'
+            }
+            aria-label="Toggle light or dark theme"
+          >
+            {preference === 'system' ? (
+              <Monitor size={15} />
+            ) : resolvedTheme === 'dark' ? (
+              <Moon size={15} />
+            ) : (
+              <Sun size={15} />
+            )}
+            <span>
+              {preference === 'system' ? `Auto (${resolvedTheme})` : preference === 'dark' ? 'Dark' : 'Light'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setIsGuidelinesOpen(true)}
+          >
+            <BookOpen size={15} />
+            <span>View Guidelines</span>
+          </button>
+        </div>
       </header>
 
       {/* Guided Step Progress Bar */}
