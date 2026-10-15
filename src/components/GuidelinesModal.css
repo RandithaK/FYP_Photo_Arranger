@@ -1,0 +1,272 @@
+.guidelines-modal-dialog {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  animation: modalEnter 0.2s ease-out;
+}
+
+.guidelines-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.guidelines-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.guidelines-icon-box {
+  width: 40px;
+  height: 40px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.guidelines-title-row h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.guidelines-subtitle {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.guidelines-content-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.spec-rule-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.spec-rule-section.highlight-box {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.rule-badge-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+}
+
+.rule-badge-title h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.spec-bullet-list {
+  margin: 0 0 1rem 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.text-danger {
+  color: #dc2626;
+}
+
+.examples-comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.example-box {
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.example-box.correct {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.example-box.wrong {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.example-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.example-badge.success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.example-badge.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.example-visual-card {
+  width: 140px;
+  border: 1px solid #000000;
+  background: #ffffff;
+}
+
+.visual-photo-area {
+  height: 120px;
+  border-bottom: 1px solid #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visual-photo-area.headshot {
+  background: #e2e8f0;
+}
+
+.face-circle {
+  width: 65px;
+  height: 80px;
+  background: #94a3b8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.visual-photo-area.torso {
+  background: #e2e8f0;
+}
+
+.torso-box {
+  width: 40px;
+  height: 50px;
+  background: #94a3b8;
+  border-radius: 50% 50% 10% 10%;
+  font-size: 8px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.visual-text-area {
+  font-family: 'Times New Roman', serif;
+  text-align: center;
+  font-size: 11px;
+}
+
+.visual-index {
+  padding: 2px;
+  border-bottom: 1px solid #000000;
+  font-weight: bold;
+}
+
+.visual-name {
+  padding: 2px;
+}
+
+.text-box-spec {
+  width: 160px;
+  border: 1px solid #000000;
+  background: #ffffff;
+  font-family: 'Times New Roman', serif;
+  text-align: center;
+}
+
+.spec-cell-index {
+  padding: 4px;
+  border-bottom: 1px solid #000000;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.spec-cell-index.empty-space {
+  padding: 20px 4px;
+}
+
+.spec-cell-name {
+  padding: 4px;
+  font-size: 12px;
+}
+
+.final-rules-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.rule-subcolumn h5 {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.9rem;
+  color: #14532d;
+}
+
+.rule-subcolumn p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #166534;
+  line-height: 1.45;
+}
+
+.guidelines-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.footer-tip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #15803d;
+  font-weight: 500;
+}
