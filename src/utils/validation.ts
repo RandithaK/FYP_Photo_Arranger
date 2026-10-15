@@ -57,30 +57,39 @@ export function validateStudentName(name: string): { isValid: boolean; message?:
 }
 
 /**
- * Auto-formats names into proper standard "A.B.C. Surname" style
+ * Normalises a "name with initials" without guessing:
+ *   "a. b. c. perera" -> "A.B.C. Perera"
+ *   "A B C Perera"    -> "A.B.C. Perera"
+ *   "A.B.C.Perera"    -> "A.B.C. Perera"
+ *   "A.B. De Silva"   -> "A.B. De Silva"   (multi-word surnames are preserved)
+ * Only leading single-letter / dotted tokens are treated as initials; the last
+ * word is never treated as an initial, and full words are left as typed
+ * (except an all-lowercase surname, which gets capitalised).
  */
-export function formatStudentNameWithInitials(input: string): string {
-  const clean = input.trim();
-  if (!clean) return '';
+export function normalizeNameWithInitials(input: string): string {
+  // Split "A.B.C.Perera" into "A.B.C." + "Perera"
+  const spaced = input.replace(/^((?:[A-Za-z]\.)+)(?=[A-Za-z]{2,})/, '$1 ');
+  const tokens = spaced.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return '';
 
-  const parts = clean.split(/\s+/);
-  if (parts.length === 1) {
-    // Single word, capitalize first letter
-    return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  const initials: string[] = [];
+  let i = 0;
+  for (; i < tokens.length - 1; i++) {
+    const t = tokens[i];
+    const isInitialToken = /^(?:[A-Za-z]\.?)+$/.test(t) && (t.includes('.') || t.length === 1);
+    if (!isInitialToken) break;
+    initials.push(...t.replace(/\./g, '').toUpperCase().split(''));
   }
 
-  // If last part is surname and preceding parts are initials
-  const surname = parts[parts.length - 1];
-  const capitalizedSurname = surname.charAt(0).toUpperCase() + surname.slice(1).toLowerCase();
-
-  const initials = parts.slice(0, parts.length - 1).map(p => {
-    // Remove periods and take first char
-    const letter = p.replace(/\./g, '').charAt(0).toUpperCase();
-    return letter ? `${letter}.` : '';
-  }).filter(Boolean).join('');
-
-  return initials ? `${initials} ${capitalizedSurname}` : capitalizedSurname;
+  let rest = tokens.slice(i).join(' ');
+  if (rest === rest.toLowerCase()) {
+    rest = rest.replace(/(^|\s)([a-z])/g, (_, sp: string, c: string) => sp + c.toUpperCase());
+  }
+  return initials.length ? `${initials.map((c) => `${c}.`).join('')} ${rest}` : rest;
 }
+
+/** @deprecated kept for existing callers; use normalizeNameWithInitials */
+export const formatStudentNameWithInitials = normalizeNameWithInitials;
 
 /**
  * Sanitizes index number by stripping any whitespace and uppercasing
