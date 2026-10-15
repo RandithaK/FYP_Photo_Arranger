@@ -31,6 +31,37 @@ function getDetector(): Promise<FaceDetector> {
   return detectorPromise;
 }
 
+export { getDetector };
+
+export interface DetectedFaceLandmarks {
+  box: FaceDetectionBox;
+  keypoints: { x: number; y: number }[];
+}
+
+export async function detectFacesWithLandmarks(
+  source: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement
+): Promise<DetectedFaceLandmarks[]> {
+  try {
+    const detector = await getDetector();
+    const result = detector.detect(source);
+    return result.detections
+      .filter((d) => d.boundingBox)
+      .map((d) => ({
+        box: {
+          x: d.boundingBox!.originX,
+          y: d.boundingBox!.originY,
+          width: d.boundingBox!.width,
+          height: d.boundingBox!.height,
+          confidence: d.categories[0]?.score ?? 0,
+        },
+        keypoints: (d.keypoints || []).map((kp) => ({ x: kp.x, y: kp.y })),
+      }));
+  } catch (err) {
+    console.warn('Face landmark detection failed', err);
+    return [];
+  }
+}
+
 /** Start loading the model early so the first upload feels instant. */
 export function preloadFaceDetector(): void {
   getDetector().catch((e) => console.warn('Face detector failed to load', e));

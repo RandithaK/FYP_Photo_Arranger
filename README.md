@@ -130,10 +130,15 @@ The application enforces and validates all guidelines specified in the universit
 ## 🚀 Key Features
 
 - **Guided 3-Step Workflow**: Clean, distraction-free stepped flow (1. Details $\rightarrow$ 2. Photos $\rightarrow$ 3. Arrange & Export).
-- **Flexible Photo Ingestion**:
+- **Flexible Photo Ingestion & Professional Photo Reminders**:
   - **Drag and Drop**: Drop photos onto individual student slots or drop multiple photos at once to populate subsequent members sequentially.
-  - **Native File Picker**: "Browse File" buttons on each student card.
-  - **Device Camera Capture**: Capture directly in-browser with live 3:4 framing guides, front/rear camera flip, freeze review, and auto-face alignment.
+  - **Native File Picker**: "Browse File" buttons on each student card with built-in format filtering.
+  - **Professional Photo Reminders**: Clear guideline callouts preventing accidental selfie or casual snapshot uploads.
+  - **Device Camera with Live Positioning Suggestions**:
+    - Real-time in-browser pose analyzer detecting head distance, tilt, centering, eye level line, and lighting.
+    - Live guidance prompts: *"Move closer"*, *"Step back"*, *"Keep head upright (level eyes)"*, *"Raise camera to eye level"*, *"Face camera directly"*.
+    - Interactive 3:4 portrait guide frame with real-time green alignment states and ready shutter pulse.
+    - Front/rear camera switching, freeze review, and instant BlazeFace alignment.
 - **Intelligent Face Cropping & Manual Override**:
   - MediaPipe BlazeFace detection frames headshots automatically.
   - Interactive crop modal with zoom (1x to 2.5x), pan, 90° rotation, and horizontal mirror flip.

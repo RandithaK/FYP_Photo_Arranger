@@ -8,6 +8,7 @@ import {
   UploadCloud,
   Crop,
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Sparkles,
@@ -214,6 +215,16 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
         )}
       </div>
 
+      {/* Professional Photo Guidelines Notice */}
+      <div className="photo-guideline-notice">
+        <div className="photo-guideline-notice-icon">
+          <AlertTriangle size={18} />
+        </div>
+        <div className="photo-guideline-notice-text">
+          <strong>Professional Photo Requirement:</strong> All uploads and camera captures must be formal, forward-facing headshots with a plain/light background. <span>Casual selfies, party photos, tilted angles, filters, or full-body photos will be rejected per submission guidelines.</span>
+        </div>
+      </div>
+
       {/* Grid of photo upload cards */}
       <div className="photos-grid">
         {students.map((student, idx) => {
@@ -252,6 +263,7 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
                   <div className="photo-box-prompt">
                     <UploadCloud size={24} className="upload-cloud-icon" />
                     <span className="drag-drop-hint">Drag & drop photo here</span>
+                    <span className="photo-formal-hint">Formal headshot only (no selfies)</span>
                     <span className="or-divider">or</span>
                     <div className="empty-box-btn-group">
                       <button

@@ -7,9 +7,15 @@ import {
   RotateCcw,
   Check,
   AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  ScanFace,
+  UserCheck
 } from 'lucide-react';
+import { analyzeLivePose, type PoseGuidanceResult } from '../utils/poseAnalyzer';
 import './CameraModal.css';
 
 interface CameraModalProps {
@@ -31,6 +37,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMultipleCameras, setHasMultipleCameras] = useState(true);
+  const [poseResult, setPoseResult] = useState<PoseGuidanceResult | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -122,6 +129,35 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     };
   }, [facingMode, startCamera]);
 
+  /* Live Pose & Positioning Analysis Loop */
+  useEffect(() => {
+    if (!stream || capturedDataUrl) return;
+
+    let active = true;
+    let isAnalyzing = false;
+    const scratchCanvas = document.createElement('canvas');
+
+    const intervalId = window.setInterval(async () => {
+      if (!active || isAnalyzing || !videoRef.current || videoRef.current.readyState < 2) return;
+      isAnalyzing = true;
+      try {
+        const result = await analyzeLivePose(videoRef.current, scratchCanvas, facingMode);
+        if (active) {
+          setPoseResult(result);
+        }
+      } catch (err) {
+        console.warn('Live pose analysis tick error:', err);
+      } finally {
+        isAnalyzing = false;
+      }
+    }, 120);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [stream, capturedDataUrl, facingMode]);
+
   const handleToggleCamera = () => {
     const next = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(next);
@@ -148,6 +184,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.96);
     setCapturedDataUrl(dataUrl);
+    setPoseResult(null);
 
     canvas.toBlob(
       (blob) => {
@@ -183,6 +220,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const handleClose = () => {
     stopStream();
     setCapturedDataUrl(null);
+    setPoseResult(null);
     capturedFileRef.current = null;
     onClose();
   };
@@ -226,6 +264,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           </div>
         </div>
 
+        {/* Professional Headshot Notice */}
+        <div className="camera-guideline-banner">
+          <AlertTriangle size={17} className="camera-guideline-icon" />
+          <div className="camera-guideline-text">
+            <strong>Professional Photo Required:</strong> Please look straight ahead in formal attire with a plain, well-lit background. <span>Casual selfies, angles, tilted heads, or filters are not allowed.</span>
+          </div>
+        </div>
+
         {/* Viewfinder Stage */}
         <div className="camera-stage">
           {error ? (
@@ -245,6 +291,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           ) : capturedDataUrl ? (
             /* Review captured snapshot */
             <div className="camera-preview-container">
+              <div className="camera-review-guideline-banner">
+                <CheckCircle2 size={15} className="camera-review-icon" />
+                <span>
+                  <strong>Check framing:</strong> Is your face upright, formal, and looking forward? (Fine-tune crop in next step).
+                </span>
+              </div>
               <img
                 src={capturedDataUrl}
                 alt="Captured headshot preview"
@@ -270,15 +322,68 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 className={`camera-video-elem ${facingMode === 'user' ? 'mirrored' : ''}`}
               />
 
-              {/* Headshot Framing Overlay */}
+              {/* Live Pose Guidance Pill */}
+              {poseResult && !isLoading && (
+                <div className={`live-pose-pill ${poseResult.status}`}>
+                  <div className="pose-pill-icon">
+                    {poseResult.status === 'perfect' ? (
+                      <Sparkles size={15} />
+                    ) : poseResult.status === 'searching' ? (
+                      <ScanFace size={15} />
+                    ) : (
+                      <UserCheck size={15} />
+                    )}
+                  </div>
+                  <span className="pose-pill-text">{poseResult.primaryMessage}</span>
+                </div>
+              )}
+
+              {/* Headshot Framing Overlay with dynamic pose feedback */}
               <div className="camera-guide-overlay">
-                <div className="camera-guide-frame">
-                  <div className="camera-guide-oval" />
-                  <div className="camera-guide-eye-line">
+                <div
+                  className={`camera-guide-frame ${
+                    poseResult?.status === 'perfect'
+                      ? 'frame-perfect'
+                      : poseResult?.status === 'adjusting'
+                      ? 'frame-adjusting'
+                      : ''
+                  }`}
+                >
+                  <div
+                    className={`camera-guide-oval ${
+                      poseResult?.checks.distance && poseResult?.checks.centered ? 'oval-aligned' : ''
+                    }`}
+                  />
+                  <div
+                    className={`camera-guide-eye-line ${
+                      poseResult?.checks.eyeLevel ? 'line-aligned' : ''
+                    }`}
+                  >
                     <span>Eye level</span>
                   </div>
                 </div>
               </div>
+
+              {/* Real-Time Guideline Checklist Chips */}
+              {poseResult && poseResult.hasFace && (
+                <div className="pose-live-checklist">
+                  <span className={`pose-chip ${poseResult.checks.centered ? 'ok' : 'pending'}`}>
+                    {poseResult.checks.centered ? '✓' : '•'} Centered
+                  </span>
+                  <span className={`pose-chip ${poseResult.checks.distance ? 'ok' : 'pending'}`}>
+                    {poseResult.checks.distance ? '✓' : '•'} Headshot Size
+                  </span>
+                  <span className={`pose-chip ${poseResult.checks.upright ? 'ok' : 'pending'}`}>
+                    {poseResult.checks.upright ? '✓' : '•'} Upright (0°)
+                  </span>
+                  <span className={`pose-chip ${poseResult.checks.eyeLevel ? 'ok' : 'pending'}`}>
+                    {poseResult.checks.eyeLevel ? '✓' : '•'} Eye Level
+                  </span>
+                  <span className={`pose-chip ${poseResult.checks.forward ? 'ok' : 'pending'}`}>
+                    {poseResult.checks.forward ? '✓' : '•'} Forward
+                  </span>
+                </div>
+              )}
 
               {isLoading && (
                 <div className="camera-loading-overlay">
@@ -331,10 +436,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
               <button
                 type="button"
-                className="shutter-btn"
+                className={`shutter-btn ${poseResult?.isReadyToCapture ? 'ready' : ''}`}
                 onClick={handleSnap}
                 disabled={isLoading || Boolean(error) || !stream}
-                title="Take Photo"
+                title={poseResult?.isReadyToCapture ? 'Pose is perfect! Click to snap' : 'Take Photo'}
                 aria-label="Capture photo"
               >
                 <div className="shutter-inner">

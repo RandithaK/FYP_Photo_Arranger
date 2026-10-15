@@ -28,6 +28,10 @@
   --banner-text: #92400e;
   --banner-icon: #d97706;
   --banner-btn: #b45309;
+  --notice-bg: #fffbeb;
+  --notice-border: #fde68a;
+  --notice-text: #92400e;
+  --notice-icon: #d97706;
   --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   --modal-backdrop: rgba(15, 23, 42, 0.7);
 
@@ -69,6 +73,10 @@
     --banner-text: #fde68a;
     --banner-icon: #f59e0b;
     --banner-btn: #fef08a;
+    --notice-bg: #291804;
+    --notice-border: #452707;
+    --notice-text: #fde68a;
+    --notice-icon: #f59e0b;
     --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     --modal-backdrop: rgba(0, 0, 0, 0.82);
   }
@@ -100,6 +108,10 @@
   --banner-text: #fde68a;
   --banner-icon: #f59e0b;
   --banner-btn: #fef08a;
+  --notice-bg: #291804;
+  --notice-border: #452707;
+  --notice-text: #fde68a;
+  --notice-icon: #f59e0b;
   --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   --modal-backdrop: rgba(0, 0, 0, 0.82);
 }
