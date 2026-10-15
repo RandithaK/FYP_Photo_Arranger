@@ -12,7 +12,8 @@ import {
   ArrowRight,
   Sparkles,
   Loader2,
-  Camera
+  Camera,
+  FolderOpen
 } from 'lucide-react';
 
 interface Step2PhotosProps {
@@ -33,6 +34,9 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [cameraStudentId, setCameraStudentId] = useState<string | null>(null);
+  const [dragOverStudentId, setDragOverStudentId] = useState<string | null>(null);
+
+  const dragCounterRef = useRef<Record<string, number>>({});
   const batchInputRef = useRef<HTMLInputElement>(null);
   const singleInputRef = useRef<HTMLInputElement>(null);
   const currentTargetStudentId = useRef<string | null>(null);
@@ -71,7 +75,7 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
       await processAndAssignPhoto(studentId, file);
     } catch (e) {
       console.error(e);
-      alert('Could not decode this photo. Please try a standard JPG or PNG.');
+      alert('Could not decode this photo. Please try a standard JPG, PNG, or WebP image.');
     } finally {
       setProcessingId(null);
     }
@@ -82,16 +86,17 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
     singleInputRef.current?.click();
   };
 
-  const handleBatchUpload = async (files: FileList | null) => {
+  const handleBatchUpload = async (files: FileList | File[] | null, startIndex = 0) => {
     if (!files || files.length === 0) return;
     setIsBatchProcessing(true);
     const fileArray = Array.from(files);
 
     try {
       const copy = [...students];
-      for (let i = 0; i < fileArray.length && i < copy.length; i++) {
+      for (let i = 0; i < fileArray.length && startIndex + i < copy.length; i++) {
         const file = fileArray[i];
-        const student = copy[i];
+        const targetIdx = startIndex + i;
+        const student = copy[targetIdx];
         try {
           const { src, img } = await loadPhotoFile(file);
           const W = img.naturalWidth;
@@ -99,7 +104,7 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
           const face = await detectFace(img).catch(() => null);
           const crop = calculateHeadshotCrop(W, H, face);
 
-          copy[i] = {
+          copy[targetIdx] = {
             ...student,
             photo: {
               src,
@@ -110,12 +115,52 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
             },
           };
         } catch (err) {
-          console.warn(`Failed photo #${i + 1}`, err);
+          console.warn(`Failed photo #${targetIdx + 1}`, err);
         }
       }
       onUpdateStudents(copy);
     } finally {
       setIsBatchProcessing(false);
+    }
+  };
+
+  /* Drag and Drop event handlers */
+  const handleDragEnter = (studentId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current[studentId] = (dragCounterRef.current[studentId] || 0) + 1;
+    setDragOverStudentId(studentId);
+  };
+
+  const handleDragLeave = (studentId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current[studentId] = Math.max(0, (dragCounterRef.current[studentId] || 1) - 1);
+    if (dragCounterRef.current[studentId] === 0 && dragOverStudentId === studentId) {
+      setDragOverStudentId(null);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = async (studentId: string, idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current[studentId] = 0;
+    setDragOverStudentId(null);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    if (files.length > 1) {
+      await handleBatchUpload(files, idx);
+    } else {
+      const file = files[0];
+      await handleSingleUpload(studentId, file);
     }
   };
 
@@ -143,7 +188,7 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
         multiple
         accept={IMAGE_ACCEPT}
         onChange={(e) => {
-          handleBatchUpload(e.target.files);
+          handleBatchUpload(e.target.files, 0);
           e.target.value = '';
         }}
       />
@@ -184,32 +229,51 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
 
               {/* Photo Area */}
               <div
-                className={`photo-box ${!photo ? 'empty' : ''}`}
+                className={`photo-box ${!photo ? 'empty' : ''} ${dragOverStudentId === student.id ? 'drag-over' : ''}`}
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => handleDragEnter(student.id, e)}
+                onDragLeave={(e) => handleDragLeave(student.id, e)}
+                onDrop={(e) => handleDrop(student.id, idx, e)}
+                onClick={photo || isBusy ? undefined : () => triggerUploadFor(student.id)}
               >
                 {isBusy ? (
                   <div className="photo-box-state">
                     <Loader2 size={24} className="spin-icon" />
                     <span>Detecting face...</span>
                   </div>
+                ) : dragOverStudentId === student.id ? (
+                  <div className="photo-box-drag-active">
+                    <UploadCloud size={32} className="drag-icon-bounce" />
+                    <span>Drop Photo Here</span>
+                  </div>
                 ) : photo ? (
                   <CroppedPreview photo={photo} />
                 ) : (
                   <div className="photo-box-prompt">
+                    <UploadCloud size={24} className="upload-cloud-icon" />
+                    <span className="drag-drop-hint">Drag & drop photo here</span>
+                    <span className="or-divider">or</span>
                     <div className="empty-box-btn-group">
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm empty-action-btn"
-                        onClick={() => triggerUploadFor(student.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerUploadFor(student.id);
+                        }}
                       >
-                        <UploadCloud size={14} />
-                        <span>Upload File</span>
+                        <FolderOpen size={13} />
+                        <span>Browse File</span>
                       </button>
                       <button
                         type="button"
                         className="btn btn-primary btn-sm empty-action-btn"
-                        onClick={() => setCameraStudentId(student.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCameraStudentId(student.id);
+                        }}
                       >
-                        <Camera size={14} />
+                        <Camera size={13} />
                         <span>Use Camera</span>
                       </button>
                     </div>
@@ -248,10 +312,10 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => triggerUploadFor(student.id)}
-                      title="Upload new photo file"
+                      title="Browse replacement photo file"
                     >
-                      <UploadCloud size={14} />
-                      <span>Upload</span>
+                      <FolderOpen size={14} />
+                      <span>Browse</span>
                     </button>
                     <button
                       type="button"
