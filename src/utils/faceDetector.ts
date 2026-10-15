@@ -1,14 +1,5 @@
 import type { FaceDetector } from '@mediapipe/tasks-vision';
 import type { CropData, FaceDetectionBox } from '../types';
-import { loadImageElement } from './fileUtils';
-
-/** Crop rectangle in source-image pixels. */
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 /** Output headshot aspect ratio (width / height). */
 export const HEADSHOT_ASPECT = 3 / 4;
@@ -131,7 +122,7 @@ export function calculateHeadshotCrop(
   imgW: number,
   imgH: number,
   face: FaceDetectionBox | null
-): Rect {
+): CropData {
   if (!face) return centeredCrop(imgW, imgH);
 
   const FACE_TO_CROP = 2.2;
@@ -154,7 +145,7 @@ export function calculateHeadshotCrop(
 }
 
 /** Largest 3:4 crop, horizontally centred and biased towards the top. */
-export function centeredCrop(imgW: number, imgH: number): Rect {
+export function centeredCrop(imgW: number, imgH: number): CropData {
   let w = imgW;
   let h = w / HEADSHOT_ASPECT;
   if (h > imgH) {
@@ -168,32 +159,11 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-function roundCrop(c: Rect): Rect {
+function roundCrop(c: CropData): CropData {
   return {
     x: Math.round(c.x),
     y: Math.round(c.y),
     width: Math.round(c.width),
     height: Math.round(c.height),
   };
-}
-
-// --- Compatibility wrappers for the pre-wizard UI (removed in the UX redesign) ---
-
-/** @deprecated use detectFace */
-export async function detectFaceInImage(
-  src: string | HTMLImageElement
-): Promise<FaceDetectionBox | null> {
-  const img = typeof src === 'string' ? await loadImageElement(src) : src;
-  return detectFace(img).catch(() => null);
-}
-
-/** @deprecated use calculateHeadshotCrop */
-export function calculateSmartCrop(
-  imgW: number,
-  imgH: number,
-  face: FaceDetectionBox | null,
-  _aspect?: number
-): CropData {
-  void _aspect;
-  return { ...calculateHeadshotCrop(imgW, imgH, face), zoom: 1, rotation: 0, flipH: false, flipV: false };
 }

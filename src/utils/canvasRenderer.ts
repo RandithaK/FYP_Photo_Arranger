@@ -1,226 +1,120 @@
-import type { ProjectConfig, Student, LayoutOptions } from '../types';
+import type { Student } from '../types';
 import { loadImageElement } from './fileUtils';
 
-export interface RenderResult {
-  canvas: HTMLCanvasElement;
-  width: number;
-  height: number;
+const SERIF = '"Times New Roman", Times, "Liberation Serif", serif';
+
+/** Upper bounds that keep the canvas within browser limits. */
+const MAX_CARD_WIDTH = 1500;
+const MAX_CANVAS_WIDTH = 8000;
+
+const GAP_RATIO = 0.03; // uniform spacing between/around cards
+const ROW_RATIO = 0.12; // height of each text row relative to card width
+
+/** Below this card width the output will look soft when printed. */
+export const LOW_RES_CARD_WIDTH = 300;
+
+/**
+ * Output card width: the largest size every photo can fill without upscaling.
+ * All cards must be identical (guideline §3), so the smallest crop decides.
+ */
+export function outputCardWidth(students: Student[]): number {
+  const n = students.length;
+  const smallestCrop = Math.min(...students.map((s) => s.photo?.crop.width ?? Infinity));
+  // canvas width = card * (n + gapRatio * (n + 1))
+  const canvasCap = Math.floor(MAX_CANVAS_WIDTH / (n + GAP_RATIO * (n + 1)));
+  return Math.max(1, Math.floor(Math.min(smallestCrop, MAX_CARD_WIDTH, canvasCap)));
 }
 
 /**
- * Renders the entire submission image (Group or Individual) strictly following the PDF guidelines.
- * Returns an HTMLCanvasElement that can be displayed or exported to high-resolution JPEG.
+ * Renders the submission image following the guidelines:
+ * identical 3:4 photos in form order, index number directly above the name
+ * in tight bordered rows, uniform spacing, serif type, white background.
  */
-export async function renderCombinedCanvas(
-  config: ProjectConfig,
-  customScale: number = 2
-): Promise<HTMLCanvasElement> {
-  const { projectType, students, layout } = config;
-  const scale = customScale || layout.outputScale || 2;
+export async function renderSubmission(students: Student[]): Promise<HTMLCanvasElement> {
+  const images = await Promise.all(students.map((s) => loadImageElement(s.photo!.src)));
 
-  // Filter students to render:
-  // Individual project only takes the first student
-  const activeStudents = projectType === 'individual'
-    ? students.slice(0, 1)
-    : students;
-
-  const count = activeStudents.length;
-  if (count === 0) {
-    const emptyCanvas = document.createElement('canvas');
-    emptyCanvas.width = 400 * scale;
-    emptyCanvas.height = 300 * scale;
-    const ctx = emptyCanvas.getContext('2d')!;
-    ctx.scale(scale, scale);
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(0, 0, 400, 300);
-    ctx.font = '16px sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.textAlign = 'center';
-    ctx.fillText('No students to render', 200, 150);
-    return emptyCanvas;
-  }
-
-  // Preload all cropped images
-  const loadedImages: Array<HTMLImageElement | null> = await Promise.all(
-    activeStudents.map(async (s) => {
-      const src = s.croppedImageUrl || s.originalImageUrl;
-      if (!src) return null;
-      try {
-        return await loadImageElement(src);
-      } catch (e) {
-        console.warn('Failed to load image for canvas render', e);
-        return null;
-      }
-    })
-  );
-
-  // Card dimensions (in unscaled CSS pixels)
-  const cardW = layout.cardWidth || 360;
-  const photoH = layout.photoHeight || 480; // 3:4 ratio = 360:480
-  const indexH = layout.indexBoxHeight || 46;
-  const nameH = layout.nameBoxHeight || 46;
-  const cardH = photoH + indexH + nameH;
-
-  const gap = layout.seamlessTouching ? 0 : (layout.gap ?? 12);
-  const outerPad = layout.padding ?? (layout.seamlessTouching ? 0 : 20);
-  const borderW = layout.borderWidth || 2;
-
-  // Total canvas dimensions
-  const totalW = outerPad * 2 + (cardW * count) + (gap * (count - 1));
-  const totalH = outerPad * 2 + cardH;
+  const n = students.length;
+  const cardW = outputCardWidth(students);
+  const photoH = Math.round((cardW * 4) / 3);
+  const rowH = Math.round(cardW * ROW_RATIO);
+  const cardH = photoH + rowH * 2;
+  const gap = Math.round(cardW * GAP_RATIO);
+  const line = Math.max(1, Math.round(cardW / 300));
 
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(totalW * scale);
-  canvas.height = Math.round(totalH * scale);
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not get canvas context');
-
-  // Set high quality smoothing
+  canvas.width = gap * (n + 1) + cardW * n;
+  canvas.height = gap * 2 + cardH;
+  const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Scale context for retina / high-DPI rendering
-  ctx.scale(scale, scale);
+  // One font size per row type across all cards so text lines up perfectly
+  const textMaxW = cardW - rowH * 0.5;
+  const indexSize = fitFontSize(ctx, students.map((s) => s.indexNumber), rowH * 0.6, textMaxW);
+  const nameSize = fitFontSize(ctx, students.map((s) => s.name.trim()), rowH * 0.52, textMaxW);
 
-  // Background fill (pure white as required for academic submissions)
-  ctx.fillStyle = layout.backgroundColor || '#ffffff';
-  ctx.fillRect(0, 0, totalW, totalH);
+  students.forEach((s, i) => {
+    const x = gap + i * (cardW + gap);
+    const y = gap;
+    const c = s.photo!.crop;
 
-  // Render each student card side-by-side
-  for (let i = 0; i < count; i++) {
-    const student = activeStudents[i];
-    const img = loadedImages[i];
-    const cardX = outerPad + i * (cardW + gap);
-    const cardY = outerPad;
+    ctx.drawImage(images[i], c.x, c.y, c.width, c.height, x, y, cardW, photoH);
 
-    renderStudentCard(ctx, student, img, cardX, cardY, cardW, photoH, indexH, nameH, borderW, layout);
-  }
+    ctx.fillStyle = '#000000';
+    drawCentered(ctx, s.indexNumber, `${indexSize}px ${SERIF}`, x + cardW / 2, y + photoH + rowH / 2);
+    drawCentered(ctx, s.name.trim(), `${nameSize}px ${SERIF}`, x + cardW / 2, y + photoH + rowH * 1.5);
+
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = line;
+    ctx.strokeRect(x + line / 2, y + line / 2, cardW - line, cardH - line);
+    hLine(ctx, x, x + cardW, y + photoH, line);
+    hLine(ctx, x, x + cardW, y + photoH + rowH, line);
+  });
 
   return canvas;
 }
 
-/**
- * Draws a single student card with strict adherence to PDF requirements:
- * 1. Headshot photo box (black border)
- * 2. Index number box directly underneath (no extra space, crisp serif font)
- * 3. Horizontal line
- * 4. Name with initials box below index number
- */
-function renderStudentCard(
+function fitFontSize(
   ctx: CanvasRenderingContext2D,
-  student: Student,
-  img: HTMLImageElement | null,
-  x: number,
-  y: number,
-  cardW: number,
-  photoH: number,
-  indexH: number,
-  nameH: number,
-  borderW: number,
-  layout: LayoutOptions
-): void {
-  const fontFam = layout.fontFamily || '"Times New Roman", Times, Georgia, serif';
-  const borderColor = layout.borderColor || '#000000';
-
-  // 1. Draw Photo
-  const photoY = y;
-  if (img) {
-    // Fill photo background white
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x, photoY, cardW, photoH);
-
-    // Draw image to fill cardW x photoH
-    ctx.drawImage(img, x, photoY, cardW, photoH);
-  } else {
-    // Placeholder if no photo
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(x, photoY, cardW, photoH);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = `italic 16px ${fontFam}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Photo Pending', x + cardW / 2, photoY + photoH / 2);
+  texts: string[],
+  start: number,
+  maxW: number
+): number {
+  let size = Math.floor(start);
+  while (size > 6) {
+    ctx.font = `${size}px ${SERIF}`;
+    if (texts.every((t) => ctx.measureText(t).width <= maxW)) break;
+    size--;
   }
-
-  // Border around photo
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = borderW;
-  ctx.strokeRect(x, photoY, cardW, photoH);
-
-  // 2. Draw Index Number Box
-  const indexY = photoY + photoH;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x, indexY, cardW, indexH);
-
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = borderW;
-  ctx.strokeRect(x, indexY, cardW, indexH);
-
-  // Draw Index Number Text
-  const indexText = student.indexNumber.trim() || 'INDEX NO';
-  ctx.fillStyle = '#000000';
-  ctx.font = `bold ${layout.fontSizeIndex || 22}px ${fontFam}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // Vertically centered inside index cell with zero extraneous margin
-  ctx.fillText(indexText, x + cardW / 2, indexY + indexH / 2);
-
-  // 3. Draw Student Name with Initials Box
-  const nameY = indexY + indexH;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x, nameY, cardW, nameH);
-
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = borderW;
-  ctx.strokeRect(x, nameY, cardW, nameH);
-
-  // Draw Name Text (clean, formal, properly capitalized)
-  const nameText = student.name.trim() || 'A.B.C. Student';
-  ctx.fillStyle = '#000000';
-  ctx.font = `normal ${layout.fontSizeName || 19}px ${fontFam}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(nameText, x + cardW / 2, nameY + nameH / 2);
+  return size;
 }
 
-/**
- * Exports the project directly as a high-quality JPEG Blob and Data URL.
- * Guarantees output is strictly JPEG format as requested!
- */
-export async function exportProjectAsJpeg(
-  config: ProjectConfig,
-  quality: number = 0.98,
-  scale: number = 2
-): Promise<{ blob: Blob; dataUrl: string; filename: string }> {
-  const canvas = await renderCombinedCanvas(config, scale);
+/** Centres text on its cap height so baselines match across cards. */
+function drawCentered(ctx: CanvasRenderingContext2D, text: string, font: string, cx: number, cy: number) {
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const capH = ctx.measureText('H').actualBoundingBoxAscent;
+  ctx.fillText(text, cx, Math.round(cy + capH / 2));
+}
 
-  // Generate appropriate filename based on PDF guidelines
-  let prefix = 'FYP';
-  if (config.projectType === 'group') {
-    const leader = config.students[0];
-    const leaderIndex = leader ? leader.indexNumber.replace(/\s+/g, '') : 'Group';
-    prefix = `FYP_Group_Photo_${leaderIndex}`;
-  } else {
-    const student = config.students[0];
-    const studentIndex = student ? student.indexNumber.replace(/\s+/g, '') : 'Individual';
-    prefix = `FYP_Photo_${studentIndex}`;
-  }
+function hLine(ctx: CanvasRenderingContext2D, x1: number, x2: number, y: number, w: number) {
+  ctx.beginPath();
+  ctx.moveTo(x1, y);
+  ctx.lineTo(x2, y);
+  ctx.lineWidth = w;
+  ctx.stroke();
+}
 
-  const filename = `${prefix}.jpg`;
+export function canvasToJpeg(canvas: HTMLCanvasElement, quality = 0.95): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG encoding failed'))), 'image/jpeg', quality)
+  );
+}
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          return reject(new Error('Failed to create JPEG blob from canvas'));
-        }
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve({ blob, dataUrl, filename });
-      },
-      'image/jpeg',
-      quality
-    );
-  });
+export function submissionFilename(students: Student[], group: boolean): string {
+  const id = students[0]?.indexNumber || 'submission';
+  return group ? `FYP_Group_${id}.jpg` : `FYP_${id}.jpg`;
 }
