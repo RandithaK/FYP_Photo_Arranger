@@ -1,4 +1,4 @@
-import { Student, ProjectConfig, ProjectValidation, StudentValidation, ValidationItem } from '../types';
+import type { Student, ProjectConfig, ProjectValidation, StudentValidation, ValidationItem } from '../types';
 
 /**
  * Validates a student's index number according to PDF rules:
