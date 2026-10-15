@@ -50,13 +50,6 @@ export const CropperModal: React.FC<CropperModalProps> = ({
 
   const targetAspectRatio = 3 / 4; // 3:4 portrait
 
-  // Initialize crop when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setCrop({ ...student.crop });
-    }
-  }, [isOpen, student.crop]);
-
   // When natural image loads, set dimensions
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;

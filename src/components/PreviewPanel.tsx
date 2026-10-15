@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ProjectConfig } from '../types';
 import { renderCombinedCanvas } from '../utils/canvasRenderer';
 import { downloadCanvasAsJpeg, copyCanvasToClipboard } from '../utils/fileUtils';
@@ -36,49 +36,52 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
     estSizeKb: 0,
   });
 
-  // Re-render the combined canvas whenever students or layout change
-  const renderLivePreview = useCallback(async () => {
-    setIsRendering(true);
-    try {
-      // Scale 2 for sharp retina preview and export
-      const renderedCanvas = await renderCombinedCanvas(config, config.layout.outputScale || 2);
-      canvasRef.current = renderedCanvas;
-
-      const container = containerRef.current;
-      if (container) {
-        container.innerHTML = '';
-        renderedCanvas.style.maxWidth = '100%';
-        renderedCanvas.style.height = 'auto';
-        renderedCanvas.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.15)';
-        renderedCanvas.style.borderRadius = '2px';
-        renderedCanvas.style.display = 'block';
-        container.appendChild(renderedCanvas);
-      }
-
-      // Estimate JPEG size
-      renderedCanvas.toBlob(
-        (blob) => {
-          if (blob) {
-            setImageMeta({
-              width: renderedCanvas.width,
-              height: renderedCanvas.height,
-              estSizeKb: Math.round(blob.size / 1024),
-            });
-          }
-        },
-        'image/jpeg',
-        0.95
-      );
-    } catch (err) {
-      console.error('Failed to render live preview', err);
-    } finally {
-      setIsRendering(false);
-    }
-  }, [config]);
-
   useEffect(() => {
-    renderLivePreview();
-  }, [renderLivePreview]);
+    let active = true;
+
+    const timer = setTimeout(async () => {
+      setIsRendering(true);
+      try {
+        const renderedCanvas = await renderCombinedCanvas(config, config.layout.outputScale || 2);
+        if (!active) return;
+        canvasRef.current = renderedCanvas;
+
+        const container = containerRef.current;
+        if (container) {
+          container.innerHTML = '';
+          renderedCanvas.style.maxWidth = '100%';
+          renderedCanvas.style.height = 'auto';
+          renderedCanvas.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.15)';
+          renderedCanvas.style.borderRadius = '2px';
+          renderedCanvas.style.display = 'block';
+          container.appendChild(renderedCanvas);
+        }
+
+        renderedCanvas.toBlob(
+          (blob) => {
+            if (blob && active) {
+              setImageMeta({
+                width: renderedCanvas.width,
+                height: renderedCanvas.height,
+                estSizeKb: Math.round(blob.size / 1024),
+              });
+            }
+          },
+          'image/jpeg',
+          0.95
+        );
+      } catch (err) {
+        console.error('Failed to render live preview', err);
+      } finally {
+        if (active) setIsRendering(false);
+      }
+    }, 0);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [config]);
 
   // Handle Download (STRICTLY JPEG as specified)
   const handleDownloadJpeg = () => {
