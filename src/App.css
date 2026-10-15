@@ -497,11 +497,27 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  text-align: center;
-  padding: 0.5rem;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0.75rem;
+}
+
+.empty-box-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 160px;
+  align-items: stretch;
+}
+
+.empty-action-btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 0.78rem;
+  padding: 0.45rem 0.65rem;
+  gap: 0.35rem;
 }
 
 .photo-box-state {
@@ -563,11 +579,14 @@
 
 .photo-card-actions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .photo-card-actions .btn {
   flex: 1;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.72rem;
+  gap: 0.25rem;
 }
 
 /* Step 3 Preview */

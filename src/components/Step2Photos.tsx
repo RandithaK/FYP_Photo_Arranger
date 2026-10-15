@@ -3,6 +3,7 @@ import type { Student } from '../types';
 import { loadPhotoFile, IMAGE_ACCEPT } from '../utils/fileUtils';
 import { detectFace, calculateHeadshotCrop } from '../utils/faceDetector';
 import { photosComplete } from '../utils/validation';
+import { CameraModal } from './CameraModal';
 import {
   UploadCloud,
   Crop,
@@ -10,7 +11,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Sparkles,
-  Loader2
+  Loader2,
+  Camera
 } from 'lucide-react';
 
 interface Step2PhotosProps {
@@ -30,6 +32,7 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
 }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [cameraStudentId, setCameraStudentId] = useState<string | null>(null);
   const batchInputRef = useRef<HTMLInputElement>(null);
   const singleInputRef = useRef<HTMLInputElement>(null);
   const currentTargetStudentId = useRef<string | null>(null);
@@ -116,6 +119,8 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
     }
   };
 
+  const activeStudentForCamera = students.find((s) => s.id === cameraStudentId) || null;
+
   return (
     <div className="step-card">
       {/* Hidden Inputs */}
@@ -180,7 +185,6 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
               {/* Photo Area */}
               <div
                 className={`photo-box ${!photo ? 'empty' : ''}`}
-                onClick={photo || isBusy ? undefined : () => triggerUploadFor(student.id)}
               >
                 {isBusy ? (
                   <div className="photo-box-state">
@@ -191,8 +195,24 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
                   <CroppedPreview photo={photo} />
                 ) : (
                   <div className="photo-box-prompt">
-                    <UploadCloud size={24} />
-                    <span>Click to upload headshot</span>
+                    <div className="empty-box-btn-group">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm empty-action-btn"
+                        onClick={() => triggerUploadFor(student.id)}
+                      >
+                        <UploadCloud size={14} />
+                        <span>Upload File</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm empty-action-btn"
+                        onClick={() => setCameraStudentId(student.id)}
+                      >
+                        <Camera size={14} />
+                        <span>Use Camera</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -219,16 +239,28 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => onOpenCropper(student)}
+                      title="Adjust Crop Framing"
                     >
                       <Crop size={14} />
-                      <span>Adjust Crop</span>
+                      <span>Crop</span>
                     </button>
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => triggerUploadFor(student.id)}
+                      title="Upload new photo file"
                     >
-                      <span>Replace</span>
+                      <UploadCloud size={14} />
+                      <span>Upload</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setCameraStudentId(student.id)}
+                      title="Take new photo using camera"
+                    >
+                      <Camera size={14} />
+                      <span>Camera</span>
                     </button>
                   </div>
                 </div>
@@ -255,6 +287,16 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
           <ArrowRight size={16} />
         </button>
       </div>
+
+      {/* Device Camera Modal */}
+      {activeStudentForCamera && (
+        <CameraModal
+          student={activeStudentForCamera}
+          isOpen={Boolean(activeStudentForCamera)}
+          onClose={() => setCameraStudentId(null)}
+          onCapture={handleSingleUpload}
+        />
+      )}
     </div>
   );
 };

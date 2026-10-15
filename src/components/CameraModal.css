@@ -1,0 +1,307 @@
+/* Camera Modal Dialog */
+.camera-modal-dialog {
+  background: var(--bg-card);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  max-width: 800px;
+  width: 100%;
+  max-height: 92vh;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  animation: modalEnter 0.2s ease-out;
+}
+
+.camera-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+}
+
+.camera-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.camera-modal-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  display: block;
+}
+
+.header-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.switch-cam-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Viewfinder Stage */
+.camera-stage {
+  flex: 1;
+  background: #090d16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 440px;
+  max-height: 65vh;
+}
+
+.camera-video-wrapper,
+.camera-preview-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.camera-video-elem,
+.camera-captured-img {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  display: block;
+}
+
+.camera-video-elem.mirrored {
+  transform: scaleX(-1);
+}
+
+/* Headshot Guide Overlay */
+.camera-guide-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.camera-guide-frame {
+  width: min(80%, 340px);
+  aspect-ratio: 3 / 4;
+  border: 2px dashed rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.camera-guide-oval {
+  position: absolute;
+  top: 10%;
+  left: 15%;
+  right: 15%;
+  height: 70%;
+  border: 1.5px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+}
+
+.camera-guide-eye-line {
+  position: absolute;
+  top: 45%;
+  left: 5%;
+  right: 5%;
+  border-top: 1px dashed rgba(250, 204, 21, 0.85);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.camera-guide-eye-line span {
+  font-size: 9px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fef08a;
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-top: -12px;
+}
+
+/* Loading & Error States */
+.camera-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 15, 25, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  z-index: 5;
+}
+
+.camera-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  color: #f8fafc;
+  max-width: 440px;
+}
+
+.camera-error-icon {
+  color: #ef4444;
+}
+
+.camera-error-container h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.camera-error-container p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+/* Footer Controls */
+.camera-modal-footer {
+  padding: 1rem 1.5rem;
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-shutter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 460px;
+}
+
+.shutter-btn {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 4px solid var(--border-strong);
+  background: #ffffff;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.shutter-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  border-color: var(--primary);
+}
+
+.shutter-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.shutter-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.shutter-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cam-switch-mobile-btn,
+.cam-cancel-btn {
+  min-width: 80px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.camera-review-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.camera-review-controls .btn {
+  flex: 1;
+  max-width: 220px;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 640px) {
+  .camera-modal-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .camera-modal-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .camera-modal-header h3 {
+    font-size: 1rem;
+  }
+
+  .camera-modal-subtitle {
+    font-size: 0.72rem;
+  }
+
+  .switch-cam-btn {
+    display: none; /* Handled by bottom shutter controls on mobile */
+  }
+
+  .camera-stage {
+    min-height: 240px;
+    max-height: none;
+  }
+
+  .camera-modal-footer {
+    padding: 0.85rem 1rem;
+  }
+
+  .shutter-btn {
+    width: 64px;
+    height: 64px;
+  }
+
+  .camera-review-controls {
+    flex-direction: column-reverse;
+    gap: 0.65rem;
+  }
+
+  .camera-review-controls .btn {
+    max-width: 100%;
+    width: 100%;
+    min-height: 44px;
+  }
+}
