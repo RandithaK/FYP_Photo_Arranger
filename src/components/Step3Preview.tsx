@@ -8,6 +8,7 @@ import {
   LOW_RES_CARD_WIDTH
 } from '../utils/canvasRenderer';
 import { downloadBlob } from '../utils/fileUtils';
+import { DownloadModal } from './DownloadModal';
 import {
   Download,
   Copy,
@@ -39,6 +40,7 @@ export const Step3Preview: React.FC<Step3PreviewProps> = ({
   const [isRendering, setIsRendering] = useState(true);
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0, cardW: 0 });
 
   useEffect(() => {
@@ -79,13 +81,19 @@ export const Step3Preview: React.FC<Step3PreviewProps> = ({
     };
   }, [students]);
 
-  const handleDownload = async () => {
+  const handleOpenDownloadModal = () => {
+    if (!canvasRef.current) return;
+    setIsDownloadModalOpen(true);
+  };
+
+  const handleConfirmDownload = async (groupNo: string, groupName: string) => {
     if (!canvasRef.current) return;
     setIsDownloading(true);
     try {
       const blob = await canvasToJpeg(canvasRef.current, 0.96);
-      const filename = submissionFilename(students, isGroup);
+      const filename = submissionFilename(students, isGroup, { groupNo, groupName });
       downloadBlob(blob, filename);
+      setIsDownloadModalOpen(false);
     } catch (e) {
       console.error(e);
       alert('Could not export JPEG image.');
@@ -134,7 +142,7 @@ export const Step3Preview: React.FC<Step3PreviewProps> = ({
           <button
             type="button"
             className="btn btn-primary btn-lg"
-            onClick={handleDownload}
+            onClick={handleOpenDownloadModal}
             disabled={isRendering || isDownloading}
           >
             {isDownloading ? <Loader2 size={16} className="spin-icon" /> : <Download size={16} />}
@@ -208,6 +216,14 @@ export const Step3Preview: React.FC<Step3PreviewProps> = ({
           <span>Start New Submission</span>
         </button>
       </div>
+
+      {/* Group Info / Download Filename Modal */}
+      <DownloadModal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        onConfirm={handleConfirmDownload}
+        isDownloading={isDownloading}
+      />
     </div>
   );
 };

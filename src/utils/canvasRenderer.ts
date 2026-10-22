@@ -137,7 +137,23 @@ export function canvasToJpeg(canvas: HTMLCanvasElement, quality = 0.95): Promise
   );
 }
 
-export function submissionFilename(students: Student[], group: boolean): string {
+export function submissionFilename(
+  students: Student[],
+  group: boolean,
+  groupInfo?: { groupNo?: string; groupName?: string }
+): string {
+  if (groupInfo) {
+    const rawNo = groupInfo.groupNo?.trim();
+    const rawName = groupInfo.groupName?.trim();
+
+    const noPart = rawNo || 'Group No';
+    const namePart = rawName || 'Group Name';
+
+    // Sanitize any characters invalid in filenames across platforms
+    const safeBase = `${noPart}_${namePart} Photo`.replace(/[/\\?%*:|"<>]/g, '_');
+    return `${safeBase}.jpg`;
+  }
+
   const id = students[0]?.indexNumber || 'submission';
   return group ? `FYP_Group_${id}.jpg` : `FYP_${id}.jpg`;
 }
