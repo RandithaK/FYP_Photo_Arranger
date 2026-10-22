@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Student, ProjectType, CropData } from './types';
+import type { Student, ProjectType, StudentPhoto } from './types';
 import { preloadFaceDetector } from './utils/faceDetector';
 import { useTheme } from './utils/useTheme';
 import { Step1Details } from './components/Step1Details';
@@ -43,16 +43,13 @@ export function App() {
 
   const activeStudentForCrop = students.find((s) => s.id === cropperStudentId) || null;
 
-  const handleSaveCrop = (studentId: string, crop: CropData) => {
+  const handleSaveCrop = (studentId: string, updatedPhoto: StudentPhoto) => {
     setStudents((prev) =>
       prev.map((s) =>
-        s.id === studentId && s.photo
+        s.id === studentId
           ? {
               ...s,
-              photo: {
-                ...s.photo,
-                crop,
-              },
+              photo: updatedPhoto,
             }
           : s
       )

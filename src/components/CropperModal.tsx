@@ -1,14 +1,26 @@
-import React, { useState, useRef, useCallback } from 'react';
-import type { Student, CropData } from '../types';
-import { detectFace, calculateHeadshotCrop, HEADSHOT_ASPECT } from '../utils/faceDetector';
-import { Check, X, Sparkles, RefreshCw } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import type { Student, CropData, StudentPhoto } from '../types';
+import {
+  detectFace,
+  detectOptimalRotation,
+  calculateHeadshotCrop,
+  HEADSHOT_ASPECT,
+} from '../utils/faceDetector';
+import {
+  loadImageElement,
+  decomposeRotation,
+  getRotatedDimensions,
+  drawRotatedImageToCanvas,
+  rotateImageToBlobUrl,
+} from '../utils/fileUtils';
+import { Check, X, Sparkles, RefreshCw, RotateCcw, RotateCw } from 'lucide-react';
 import './CropperModal.css';
 
 interface CropperModalProps {
   student: Student;
   isOpen: boolean;
   onClose: () => void;
-  onSaveCrop: (studentId: string, crop: CropData) => void;
+  onSaveCrop: (studentId: string, updatedPhoto: StudentPhoto) => void;
 }
 
 export const CropperModal: React.FC<CropperModalProps> = ({
@@ -19,11 +31,17 @@ export const CropperModal: React.FC<CropperModalProps> = ({
 }) => {
   const photo = student.photo;
   const initialCrop = photo?.crop || { x: 0, y: 0, width: 300, height: 400 };
+  const initialRot = photo?.rotation ?? 0;
+  const initialDecomp = decomposeRotation(initialRot);
 
   const [crop, setCrop] = useState<CropData>(initialCrop);
+  const [cardinalRot, setCardinalRot] = useState<0 | 90 | 180 | 270>(initialDecomp.cardinal);
+  const [fineRot, setFineRot] = useState<number>(initialDecomp.fine);
+  const [origImg, setOrigImg] = useState<HTMLImageElement | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const imgRef = useRef<HTMLImageElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; initialCrop: CropData }>({
     mouseX: 0,
     mouseY: 0,
@@ -31,22 +49,161 @@ export const CropperModal: React.FC<CropperModalProps> = ({
   });
   const [dragMode, setDragMode] = useState<'move' | 'nw' | 'ne' | 'sw' | 'se' | null>(null);
 
-  const origW = photo?.width ?? 1;
-  const origH = photo?.height ?? 1;
+  const totalRotation = Math.round((cardinalRot + fineRot) * 10) / 10;
 
-  // Handle AI Auto-Center
+  // Load the original unrotated image so any rotation adjustments stay crisp
+  useEffect(() => {
+    if (!photo) return;
+    let active = true;
+    const sourceUrl = photo.originalSrc || photo.src;
+    loadImageElement(sourceUrl)
+      .then((img) => {
+        if (active) setOrigImg(img);
+      })
+      .catch((err) => console.error('Failed to load image in cropper', err));
+    return () => {
+      active = false;
+    };
+  }, [photo]);
+
+  const currentDims = origImg
+    ? getRotatedDimensions(origImg.naturalWidth, origImg.naturalHeight, totalRotation)
+    : { width: photo?.width ?? 1, height: photo?.height ?? 1 };
+
+  const origW = currentDims.width;
+  const origH = currentDims.height;
+
+  // Redraw preview canvas whenever original image or rotation changes
+  useEffect(() => {
+    if (!origImg || !previewCanvasRef.current) return;
+    drawRotatedImageToCanvas(origImg, previewCanvasRef.current, totalRotation, 1200);
+  }, [origImg, totalRotation]);
+
+  // Clamp and preserve relative crop center when rotation changes dimensions
+  const adjustCropForNewDimensions = useCallback(
+    (newW: number, newH: number, prevW: number, prevH: number, prevCrop: CropData): CropData => {
+      const relCx = (prevCrop.x + prevCrop.width / 2) / Math.max(1, prevW);
+      const relCy = (prevCrop.y + prevCrop.height / 2) / Math.max(1, prevH);
+
+      let cW = Math.min(prevCrop.width, newW, newH * HEADSHOT_ASPECT);
+      cW = Math.max(60, cW);
+      let cH = cW / HEADSHOT_ASPECT;
+      if (cH > newH) {
+        cH = newH;
+        cW = cH * HEADSHOT_ASPECT;
+      }
+
+      const x = Math.max(0, Math.min(newW - cW, relCx * newW - cW / 2));
+      const y = Math.max(0, Math.min(newH - cH, relCy * newH - cH / 2));
+
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        width: Math.round(cW),
+        height: Math.round(cH),
+      };
+    },
+    []
+  );
+
+  // Rotate by ±90° and automatically frame face in new orientation
+  const handleRotateCardinal = async (delta: -90 | 90) => {
+    if (!origImg) return;
+    const nextCardinal = (((cardinalRot + delta) % 360) + 360) % 360 as 0 | 90 | 180 | 270;
+    const nextTotal = nextCardinal + fineRot;
+    const { width: nextW, height: nextH } = getRotatedDimensions(
+      origImg.naturalWidth,
+      origImg.naturalHeight,
+      nextTotal
+    );
+
+    setCardinalRot(nextCardinal);
+
+    if (previewCanvasRef.current) {
+      const { scale } = drawRotatedImageToCanvas(
+        origImg,
+        previewCanvasRef.current,
+        nextTotal,
+        1200
+      );
+      try {
+        const face = await detectFace(previewCanvasRef.current);
+        if (face) {
+          const scaledFace = {
+            x: face.x / scale,
+            y: face.y / scale,
+            width: face.width / scale,
+            height: face.height / scale,
+            confidence: face.confidence,
+          };
+          setCrop(calculateHeadshotCrop(nextW, nextH, scaledFace));
+          return;
+        }
+      } catch {
+        // Fall back to adjusted crop below
+      }
+    }
+
+    setCrop((prev) => adjustCropForNewDimensions(nextW, nextH, origW, origH, prev));
+  };
+
+  const handleFineRotationChange = (newFine: number) => {
+    if (!origImg) {
+      setFineRot(newFine);
+      return;
+    }
+    const nextTotal = cardinalRot + newFine;
+    const { width: nextW, height: nextH } = getRotatedDimensions(
+      origImg.naturalWidth,
+      origImg.naturalHeight,
+      nextTotal
+    );
+    setFineRot(newFine);
+    setCrop((prev) => adjustCropForNewDimensions(nextW, nextH, origW, origH, prev));
+  };
+
+  // Handle AI Auto-Center & Level
   const handleAutoCenter = async () => {
-    if (!imgRef.current) return;
+    if (!origImg || !previewCanvasRef.current) return;
     setIsDetecting(true);
     try {
-      const face = await detectFace(imgRef.current);
-      const newCrop = calculateHeadshotCrop(origW, origH, face);
+      const optimalRot = await detectOptimalRotation(origImg);
+      const { cardinal, fine } = decomposeRotation(optimalRot);
+      setCardinalRot(cardinal);
+      setFineRot(fine);
+
+      const { fullWidth, fullHeight, scale } = drawRotatedImageToCanvas(
+        origImg,
+        previewCanvasRef.current,
+        optimalRot,
+        1200
+      );
+
+      const face = await detectFace(previewCanvasRef.current);
+      const scaledFace = face
+        ? {
+            x: face.x / scale,
+            y: face.y / scale,
+            width: face.width / scale,
+            height: face.height / scale,
+            confidence: face.confidence,
+          }
+        : null;
+      const newCrop = calculateHeadshotCrop(fullWidth, fullHeight, scaledFace);
       setCrop(newCrop);
     } catch (e) {
       console.warn('Face detection error', e);
     } finally {
       setIsDetecting(false);
     }
+  };
+
+  const handleReset = () => {
+    if (!photo) return;
+    const decomp = decomposeRotation(photo.rotation ?? 0);
+    setCardinalRot(decomp.cardinal);
+    setFineRot(decomp.fine);
+    setCrop(photo.crop);
   };
 
   const handlePointerDown = (
@@ -67,9 +224,9 @@ export const CropperModal: React.FC<CropperModalProps> = ({
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!dragMode || !imgRef.current) return;
+      if (!dragMode || !previewCanvasRef.current) return;
 
-      const rect = imgRef.current.getBoundingClientRect();
+      const rect = previewCanvasRef.current.getBoundingClientRect();
       const scaleX = origW / rect.width;
       const scaleY = origH / rect.height;
 
@@ -174,9 +331,48 @@ export const CropperModal: React.FC<CropperModalProps> = ({
     setDragMode(null);
   };
 
-  const handleSave = () => {
-    onSaveCrop(student.id, crop);
-    onClose();
+  const handleSave = async () => {
+    if (!photo) return;
+    setIsSaving(true);
+    try {
+      const originalSrc = photo.originalSrc || photo.src;
+      const prevRot = photo.rotation ?? 0;
+      const rotationChanged = Math.abs(totalRotation - prevRot) >= 0.05;
+
+      if (!rotationChanged || !origImg) {
+        onSaveCrop(student.id, {
+          ...photo,
+          crop,
+        });
+      } else if (Math.abs(totalRotation) < 0.05) {
+        onSaveCrop(student.id, {
+          ...photo,
+          src: originalSrc,
+          originalSrc,
+          width: origImg.naturalWidth,
+          height: origImg.naturalHeight,
+          crop,
+          rotation: 0,
+        });
+      } else {
+        const rotated = await rotateImageToBlobUrl(origImg, totalRotation);
+        onSaveCrop(student.id, {
+          ...photo,
+          src: rotated.src,
+          originalSrc,
+          width: rotated.width,
+          height: rotated.height,
+          crop,
+          rotation: totalRotation,
+        });
+      }
+      onClose();
+    } catch (err) {
+      console.error('Failed to save rotated crop', err);
+      alert('Failed to apply rotation.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen || !photo) return null;
@@ -192,7 +388,7 @@ export const CropperModal: React.FC<CropperModalProps> = ({
         {/* Header */}
         <div className="cropper-modal-header">
           <div>
-            <h3>Adjust Headshot Framing</h3>
+            <h3>Adjust Headshot Framing & Rotation</h3>
             <span className="cropper-modal-subtitle">
               {student.name || student.indexNumber || 'Student'} · Aspect Ratio: 3:4 Headshot
             </span>
@@ -209,10 +405,8 @@ export const CropperModal: React.FC<CropperModalProps> = ({
           onPointerUp={handlePointerUp}
         >
           <div className="cropper-image-wrapper">
-            <img
-              ref={imgRef}
-              src={photo.src}
-              alt="Crop target"
+            <canvas
+              ref={previewCanvasRef}
               className="cropper-source-img"
             />
 
@@ -242,6 +436,62 @@ export const CropperModal: React.FC<CropperModalProps> = ({
           </div>
         </div>
 
+        {/* Manual Rotation Controls Bar */}
+        <div className="cropper-rotation-bar">
+          <div className="rotation-quick-btns">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleRotateCardinal(-90)}
+              disabled={!origImg || isDetecting || isSaving}
+              title="Rotate 90° Counter-Clockwise"
+            >
+              <RotateCcw size={14} />
+              <span>90° Left</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleRotateCardinal(90)}
+              disabled={!origImg || isDetecting || isSaving}
+              title="Rotate 90° Clockwise"
+            >
+              <RotateCw size={14} />
+              <span>90° Right</span>
+            </button>
+          </div>
+
+          <div className="rotation-slider-group">
+            <label htmlFor="fine-rotation-slider" className="rotation-slider-label">
+              <span>Straighten:</span>
+              <strong className="rotation-angle-badge">
+                {fineRot > 0 ? `+${fineRot.toFixed(1)}°` : `${fineRot.toFixed(1)}°`}
+              </strong>
+            </label>
+            <input
+              id="fine-rotation-slider"
+              type="range"
+              min="-30"
+              max="30"
+              step="0.5"
+              value={fineRot}
+              onChange={(e) => handleFineRotationChange(parseFloat(e.target.value))}
+              className="rotation-range-input"
+              disabled={!origImg || isDetecting || isSaving}
+            />
+            {fineRot !== 0 && (
+              <button
+                type="button"
+                className="btn-zero-angle"
+                onClick={() => handleFineRotationChange(0)}
+                title="Reset fine tilt to 0°"
+              >
+                0°
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Footer */}
         <div className="cropper-modal-footer">
           <div className="footer-left">
@@ -249,16 +499,17 @@ export const CropperModal: React.FC<CropperModalProps> = ({
               type="button"
               className="btn btn-secondary"
               onClick={handleAutoCenter}
-              disabled={isDetecting}
+              disabled={isDetecting || isSaving}
             >
               <Sparkles size={15} />
-              <span>{isDetecting ? 'Detecting Face...' : 'AI Auto-Center'}</span>
+              <span>{isDetecting ? 'Detecting Face...' : 'AI Auto-Level & Center'}</span>
             </button>
             <button
               type="button"
               className="btn btn-ghost"
-              onClick={() => setCrop(photo.crop)}
-              title="Reset to uploaded crop"
+              onClick={handleReset}
+              disabled={isSaving}
+              title="Reset to uploaded state"
             >
               <RefreshCw size={14} />
               <span>Reset</span>
@@ -266,12 +517,17 @@ export const CropperModal: React.FC<CropperModalProps> = ({
           </div>
 
           <div className="footer-right">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSaving}>
               Cancel
             </button>
-            <button type="button" className="btn btn-primary" onClick={handleSave}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
               <Check size={16} />
-              <span>Done</span>
+              <span>{isSaving ? 'Applying...' : 'Done'}</span>
             </button>
           </div>
         </div>

@@ -1,12 +1,22 @@
 import React, { useRef, useState } from 'react';
 import type { Student } from '../types';
-import { loadPhotoFile, IMAGE_ACCEPT } from '../utils/fileUtils';
-import { detectFace, calculateHeadshotCrop } from '../utils/faceDetector';
+import {
+  loadPhotoFile,
+  loadImageElement,
+  rotateImageToBlobUrl,
+  IMAGE_ACCEPT,
+} from '../utils/fileUtils';
+import {
+  detectFace,
+  calculateHeadshotCrop,
+  autoOrientAndFramePhoto,
+} from '../utils/faceDetector';
 import { photosComplete } from '../utils/validation';
 import { CameraModal } from './CameraModal';
 import {
   UploadCloud,
   Crop,
+  RotateCw,
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
@@ -46,28 +56,69 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
 
   const processAndAssignPhoto = async (studentId: string, file: File): Promise<void> => {
     const { src, img } = await loadPhotoFile(file);
-    const W = img.naturalWidth;
-    const H = img.naturalHeight;
-
-    const face = await detectFace(img).catch(() => null);
-    const crop = calculateHeadshotCrop(W, H, face);
+    const preparedPhoto = await autoOrientAndFramePhoto(img, src);
 
     onUpdateStudents(
       students.map((s) =>
         s.id === studentId
           ? {
               ...s,
-              photo: {
-                src,
-                width: W,
-                height: H,
-                crop,
-                faceFound: Boolean(face),
-              },
+              photo: preparedPhoto,
             }
           : s
       )
     );
+  };
+
+  const handleQuickRotate = async (student: Student) => {
+    const photo = student.photo;
+    if (!photo) return;
+    setProcessingId(student.id);
+    try {
+      const originalSrc = photo.originalSrc || photo.src;
+      const origImg = await loadImageElement(originalSrc);
+      const nextRot = ((photo.rotation ?? 0) + 90) % 360;
+
+      let workingSrc = originalSrc;
+      let workingImg = origImg;
+      let W = origImg.naturalWidth;
+      let H = origImg.naturalHeight;
+
+      if (Math.abs(nextRot) >= 0.05) {
+        const rotated = await rotateImageToBlobUrl(origImg, nextRot);
+        workingSrc = rotated.src;
+        workingImg = rotated.img;
+        W = rotated.width;
+        H = rotated.height;
+      }
+
+      const face = await detectFace(workingImg).catch(() => null);
+      const crop = calculateHeadshotCrop(W, H, face);
+
+      onUpdateStudents(
+        students.map((s) =>
+          s.id === student.id
+            ? {
+                ...s,
+                photo: {
+                  ...photo,
+                  src: workingSrc,
+                  originalSrc,
+                  width: W,
+                  height: H,
+                  crop,
+                  rotation: nextRot,
+                  faceFound: Boolean(face),
+                },
+              }
+            : s
+        )
+      );
+    } catch (e) {
+      console.error('Quick rotate failed', e);
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const handleSingleUpload = async (studentId: string, file: File) => {
@@ -100,20 +151,11 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
         const student = copy[targetIdx];
         try {
           const { src, img } = await loadPhotoFile(file);
-          const W = img.naturalWidth;
-          const H = img.naturalHeight;
-          const face = await detectFace(img).catch(() => null);
-          const crop = calculateHeadshotCrop(W, H, face);
+          const preparedPhoto = await autoOrientAndFramePhoto(img, src);
 
           copy[targetIdx] = {
             ...student,
-            photo: {
-              src,
-              width: W,
-              height: H,
-              crop,
-              faceFound: Boolean(face),
-            },
+            photo: preparedPhoto,
           };
         } catch (err) {
           console.warn(`Failed photo #${targetIdx + 1}`, err);
@@ -300,7 +342,7 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
                     {photo.faceFound ? (
                       <span className="badge-status success">
                         <Sparkles size={12} />
-                        <span>Face auto-framed</span>
+                        <span>{photo.autoRotated ? 'Auto-rotated & framed' : 'Face auto-framed'}</span>
                       </span>
                     ) : (
                       <span className="badge-status warning">
@@ -315,10 +357,20 @@ export const Step2Photos: React.FC<Step2PhotosProps> = ({
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => onOpenCropper(student)}
-                      title="Adjust Crop Framing"
+                      title="Adjust Crop & Rotation"
                     >
                       <Crop size={14} />
                       <span>Crop</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleQuickRotate(student)}
+                      disabled={isBusy}
+                      title="Rotate 90° Clockwise"
+                    >
+                      <RotateCw size={14} />
+                      <span>Rotate</span>
                     </button>
                     <button
                       type="button"

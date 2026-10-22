@@ -1,5 +1,6 @@
 import type { FaceDetector } from '@mediapipe/tasks-vision';
-import type { CropData, FaceDetectionBox } from '../types';
+import type { CropData, FaceDetectionBox, StudentPhoto } from '../types';
+import { drawRotatedImageToCanvas, rotateImageToBlobUrl } from './fileUtils';
 
 /** Output headshot aspect ratio (width / height). */
 export const HEADSHOT_ASPECT = 3 / 4;
@@ -69,51 +70,75 @@ export function preloadFaceDetector(): void {
 
 type Source = HTMLImageElement | HTMLCanvasElement;
 
-function detectIn(detector: FaceDetector, source: Source): FaceDetectionBox[] {
+function detectInWithLandmarks(detector: FaceDetector, source: Source): DetectedFaceLandmarks[] {
   const result = detector.detect(source);
   return result.detections
     .filter((d) => d.boundingBox)
     .map((d) => ({
-      x: d.boundingBox!.originX,
-      y: d.boundingBox!.originY,
-      width: d.boundingBox!.width,
-      height: d.boundingBox!.height,
-      confidence: d.categories[0]?.score ?? 0,
+      box: {
+        x: d.boundingBox!.originX,
+        y: d.boundingBox!.originY,
+        width: d.boundingBox!.width,
+        height: d.boundingBox!.height,
+        confidence: d.categories[0]?.score ?? 0,
+      },
+      keypoints: (d.keypoints || []).map((kp) => ({ x: kp.x, y: kp.y })),
     }));
 }
 
-/** Picks the most prominent face: large and confident. */
-function bestFace(faces: FaceDetectionBox[]): FaceDetectionBox | null {
+/**
+ * Scores a face detection primarily by confidence (cubed so high-confidence real faces
+ * always beat larger low-confidence false positives like logos/seals), with a gentle
+ * size tie-breaker for when multiple real people appear in the same photo.
+ */
+function scoreDetection(box: FaceDetectionBox, imgArea: number, anatomyScore = 1): number {
+  const conf = box.confidence ?? 0.5;
+  const areaRatio = Math.max(0.001, (box.width * box.height) / Math.max(1, imgArea));
+  return Math.pow(conf, 3) * Math.pow(areaRatio, 0.15) * anatomyScore;
+}
+
+function bestFaceWithLandmarks(
+  faces: DetectedFaceLandmarks[],
+  W = 1,
+  H = 1
+): DetectedFaceLandmarks | null {
   if (faces.length === 0) return null;
-  return faces.reduce((a, b) =>
-    b.width * b.height * (b.confidence ?? 1) > a.width * a.height * (a.confidence ?? 1) ? b : a
-  );
+  const imgArea = W * H;
+  return faces.reduce((a, b) => {
+    const evalA = evaluateFaceOrientation(a, W, H);
+    const evalB = evaluateFaceOrientation(b, W, H);
+    const scoreA = scoreDetection(a.box, imgArea, evalA.isUpright ? evalA.anatomyScore : 0.1);
+    const scoreB = scoreDetection(b.box, imgArea, evalB.isUpright ? evalB.anatomyScore : 0.1);
+    return scoreB > scoreA ? b : a;
+  });
 }
 
 /**
- * Detects the main face in an image. Returns null if no face is found.
- *
- * The short-range BlazeFace model expects reasonably large faces, so if nothing
- * is found on the whole image we scan overlapping square windows (multi-scale)
- * to catch smaller faces in half-body / full-body shots.
+ * Multi-scale face + landmark detection on an image or canvas of dimensions (W, H).
+ * Continues scanning smaller windows unless a high-confidence (>= 0.85) face is already found,
+ * preventing large low-confidence background emblems/seals from masking a smaller real face.
  */
-export async function detectFace(img: HTMLImageElement): Promise<FaceDetectionBox | null> {
-  const detector = await getDetector();
-  const W = img.naturalWidth;
-  const H = img.naturalHeight;
-
-  const direct = bestFace(detectIn(detector, img));
-  if (direct) return direct;
+function detectBestFaceWithLandmarksInSource(
+  detector: FaceDetector,
+  source: Source,
+  W: number,
+  H: number
+): DetectedFaceLandmarks | null {
+  const allFound: DetectedFaceLandmarks[] = [...detectInWithLandmarks(detector, source)];
+  const bestDirect = bestFaceWithLandmarks(allFound, W, H);
+  if (bestDirect && (bestDirect.box.confidence ?? 0) >= 0.85) {
+    const { isUpright } = evaluateFaceOrientation(bestDirect, W, H);
+    if (isUpright) return bestDirect;
+  }
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
+  if (!ctx) return bestDirect;
 
-  const found: FaceDetectionBox[] = [];
   for (const factor of [0.6, 0.35]) {
     const size = Math.round(Math.min(W, H) * factor);
+    if (size < 32) continue;
     const step = Math.round(size / 2);
-    // Work at a modest resolution: the model input is 128px anyway
     const tile = Math.min(size, 512);
     canvas.width = tile;
     canvas.height = tile;
@@ -124,21 +149,209 @@ export async function detectFace(img: HTMLImageElement): Promise<FaceDetectionBo
         const sx = Math.min(x, W - size);
         const sy = Math.min(y, H - size);
         ctx.clearRect(0, 0, tile, tile);
-        ctx.drawImage(img, sx, sy, size, size, 0, 0, tile, tile);
-        for (const f of detectIn(detector, canvas)) {
-          found.push({
-            x: sx + f.x * scale,
-            y: sy + f.y * scale,
-            width: f.width * scale,
-            height: f.height * scale,
-            confidence: f.confidence,
+        ctx.drawImage(source, sx, sy, size, size, 0, 0, tile, tile);
+        for (const f of detectInWithLandmarks(detector, canvas)) {
+          allFound.push({
+            box: {
+              x: sx + f.box.x * scale,
+              y: sy + f.box.y * scale,
+              width: f.box.width * scale,
+              height: f.box.height * scale,
+              confidence: f.box.confidence,
+            },
+            keypoints: f.keypoints.map((kp) => ({
+              x: (sx + kp.x * size) / W,
+              y: (sy + kp.y * size) / H,
+            })),
           });
         }
       }
     }
-    if (found.length > 0) break;
+
+    const currentBest = bestFaceWithLandmarks(allFound, W, H);
+    if (currentBest && (currentBest.box.confidence ?? 0) >= 0.85) {
+      const { isUpright } = evaluateFaceOrientation(currentBest, W, H);
+      if (isUpright) break;
+    }
   }
-  return bestFace(found);
+
+  return bestFaceWithLandmarks(allFound, W, H);
+}
+
+/**
+ * Evaluates whether a detected face's keypoints are anatomically upright
+ * (right eye to the left of left eye, nose below eyes, mouth below nose)
+ * and returns the eye-line tilt angle in degrees.
+ */
+function evaluateFaceOrientation(
+  face: DetectedFaceLandmarks,
+  W: number,
+  H: number
+): { isUpright: boolean; eyeAngleDeg: number; anatomyScore: number } {
+  const kps = face.keypoints;
+  if (!kps || kps.length < 2) {
+    return { isUpright: true, eyeAngleDeg: 0, anatomyScore: 0.5 };
+  }
+
+  const p0 = { x: kps[0].x * W, y: kps[0].y * H }; // Right eye (left side of upright image)
+  const p1 = { x: kps[1].x * W, y: kps[1].y * H }; // Left eye (right side of upright image)
+  const eyeAngleDeg = Math.atan2(p1.y - p0.y, p1.x - p0.x) * (180 / Math.PI);
+
+  const midEyeX = (p0.x + p1.x) / 2;
+  const midEyeY = (p0.y + p1.y) / 2;
+  const eyeDist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+  const eyeRatio = eyeDist / Math.max(1, face.box.width);
+
+  const nose = kps[2] ? { x: kps[2].x * W, y: kps[2].y * H } : null;
+  const mouth = kps[3] ? { x: kps[3].x * W, y: kps[3].y * H } : null;
+
+  // Check anatomical ordering: eyes -> nose -> mouth vertically
+  const noseBelowEyes = nose ? nose.y > midEyeY : true;
+  const mouthBelowNose = mouth && nose ? mouth.y > nose.y : mouth ? mouth.y > midEyeY : true;
+  const validEyeSpacing = eyeRatio >= 0.18 && eyeRatio <= 0.75;
+
+  // Check horizontal symmetry of nose/mouth relative to eye midpoint
+  let symmetryScore = 1;
+  if (nose && eyeDist > 0) {
+    const noseOffset = Math.abs(nose.x - midEyeX) / eyeDist;
+    symmetryScore = Math.max(0.2, 1 - noseOffset * 0.5);
+  }
+
+  const isUpright =
+    Math.abs(eyeAngleDeg) <= 45 && noseBelowEyes && mouthBelowNose && validEyeSpacing;
+
+  return {
+    isUpright,
+    eyeAngleDeg,
+    anatomyScore: isUpright ? symmetryScore : 0,
+  };
+}
+
+/**
+ * Automatically determines the optimal clockwise rotation (cardinal 90°/180°/270°
+ * plus fine head-tilt leveling) so the subject's face is upright and level.
+ */
+export async function detectOptimalRotation(img: HTMLImageElement): Promise<number> {
+  try {
+    const detector = await getDetector();
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+
+    // 1. Fast path ONLY if a very high-confidence upright face is detected directly
+    // on the full un-tiled frame at 0° (avoids false positives on small sub-tile logos/emblems)
+    const direct0 = bestFaceWithLandmarks(detectInWithLandmarks(detector, img), W, H);
+    if (direct0 && (direct0.box.confidence ?? 0) >= 0.88) {
+      const { isUpright, eyeAngleDeg, anatomyScore } = evaluateFaceOrientation(direct0, W, H);
+      if (isUpright && anatomyScore >= 0.7) {
+        if (Math.abs(eyeAngleDeg) >= 2.0 && Math.abs(eyeAngleDeg) <= 35) {
+          return -Math.round(eyeAngleDeg * 2) / 2;
+        }
+        return 0;
+      }
+    }
+
+    // 2. Probe all 4 cardinal orientations [0, 90, 180, 270] at equal resolution (up to 1200px)
+    // so small or upside-down/sideways faces are compared on a level playing field
+    const scratch = document.createElement('canvas');
+    const candidates: {
+      cardinal: 0 | 90 | 180 | 270;
+      score: number;
+      eyeAngleDeg: number;
+    }[] = [];
+
+    for (const cardinal of [0, 90, 180, 270] as const) {
+      drawRotatedImageToCanvas(img, scratch, cardinal, 1200);
+      const sW = scratch.width;
+      const sH = scratch.height;
+      const detected = detectBestFaceWithLandmarksInSource(detector, scratch, sW, sH);
+      if (detected) {
+        const { isUpright, eyeAngleDeg, anatomyScore } = evaluateFaceOrientation(
+          detected,
+          sW,
+          sH
+        );
+        if (isUpright) {
+          // Slight tie-breaker bonus (1.02) for 0° only when confidences are nearly identical
+          const tieBreaker = cardinal === 0 ? 1.02 : 1.0;
+          candidates.push({
+            cardinal,
+            score: scoreDetection(detected.box, sW * sH, anatomyScore) * tieBreaker,
+            eyeAngleDeg,
+          });
+        }
+      }
+    }
+
+    if (candidates.length === 0) return 0;
+
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    const fineTilt =
+      Math.abs(best.eyeAngleDeg) >= 2.0 && Math.abs(best.eyeAngleDeg) <= 35
+        ? -Math.round(best.eyeAngleDeg * 2) / 2
+        : 0;
+
+    return best.cardinal + fineTilt;
+  } catch (err) {
+    console.warn('Auto rotation detection failed', err);
+    return 0;
+  }
+}
+
+/**
+ * Runs automatic orientation + tilt correction on an uploaded image and computes
+ * the optimal 3:4 headshot crop on the oriented image.
+ */
+export async function autoOrientAndFramePhoto(
+  originalImg: HTMLImageElement,
+  originalSrc: string
+): Promise<StudentPhoto> {
+  const rotation = await detectOptimalRotation(originalImg);
+  const needsRotation = Math.abs(rotation) >= 1.5;
+
+  let workingSrc = originalSrc;
+  let workingImg = originalImg;
+  let W = originalImg.naturalWidth;
+  let H = originalImg.naturalHeight;
+
+  if (needsRotation) {
+    const rotated = await rotateImageToBlobUrl(originalImg, rotation);
+    workingSrc = rotated.src;
+    workingImg = rotated.img;
+    W = rotated.width;
+    H = rotated.height;
+  }
+
+  const face = await detectFace(workingImg).catch(() => null);
+  const crop = calculateHeadshotCrop(W, H, face);
+
+  return {
+    src: workingSrc,
+    originalSrc,
+    width: W,
+    height: H,
+    crop,
+    rotation: needsRotation ? rotation : 0,
+    autoRotated: needsRotation,
+    faceFound: Boolean(face),
+  };
+}
+
+/**
+ * Detects the main face in an image. Returns null if no face is found.
+ *
+ * The short-range BlazeFace model expects reasonably large faces, so if nothing
+ * is found on the whole image we scan overlapping square windows (multi-scale)
+ * to catch smaller faces in half-body / full-body shots.
+ */
+export async function detectFace(
+  img: HTMLImageElement | HTMLCanvasElement
+): Promise<FaceDetectionBox | null> {
+  const detector = await getDetector();
+  const W = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
+  const H = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
+  const best = detectBestFaceWithLandmarksInSource(detector, img, W, H);
+  return best ? best.box : null;
 }
 
 /**

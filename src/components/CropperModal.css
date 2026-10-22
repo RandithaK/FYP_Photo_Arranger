@@ -87,7 +87,9 @@
 
 .cropper-source-img {
   max-width: 100%;
-  max-height: 60vh;
+  max-height: 54vh;
+  width: auto;
+  height: auto;
   display: block;
   object-fit: contain;
   pointer-events: none;
@@ -168,6 +170,78 @@
   cursor: nwse-resize;
 }
 
+.cropper-rotation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
+  flex-wrap: wrap;
+}
+
+.rotation-quick-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.rotation-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  min-width: 220px;
+  justify-content: flex-end;
+}
+
+.rotation-slider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rotation-angle-badge {
+  display: inline-block;
+  min-width: 3.1rem;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.76rem;
+  padding: 0.12rem 0.38rem;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.rotation-range-input {
+  flex: 1;
+  max-width: 200px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.btn-zero-angle {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.18rem 0.45rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-zero-angle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .cropper-modal-footer {
   display: flex;
   justify-content: space-between;
@@ -213,6 +287,31 @@
   .cropper-stage {
     min-height: 220px;
     padding: 0.75rem;
+  }
+
+  .cropper-rotation-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+    padding: 0.65rem 1rem;
+  }
+
+  .rotation-quick-btns {
+    width: 100%;
+  }
+
+  .rotation-quick-btns .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .rotation-slider-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .rotation-range-input {
+    max-width: none;
   }
 
   .cropper-modal-footer {

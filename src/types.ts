@@ -13,11 +13,17 @@ export interface FaceDetectionBox extends CropData {
 }
 
 export interface StudentPhoto {
-  /** Object URL of the decoded image (HEIC already converted) */
+  /** Object URL of the oriented/rotated image (HEIC already converted) */
   src: string;
+  /** Object URL of the original unrotated image, preserved for lossless re-rotation */
+  originalSrc?: string;
   width: number;
   height: number;
   crop: CropData;
+  /** Total clockwise rotation in degrees applied to originalSrc */
+  rotation?: number;
+  /** True when orientation/tilt was automatically corrected on upload */
+  autoRotated?: boolean;
   /** False when no face was detected and the crop is just a centred guess */
   faceFound: boolean;
 }
